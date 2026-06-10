@@ -105,6 +105,20 @@ Full English and Chinese interface — switches instantly without restart.
 
 **Requirements:** Python 3.11+, [Ollama](https://ollama.com) (optional, for local models)
 
+If you don't have Python 3.11, install it via [python.org](https://www.python.org/downloads/) or with conda:
+
+```bash
+# With conda
+conda create -n rivus python=3.11
+conda activate rivus
+
+# With pyenv (macOS/Linux)
+pyenv install 3.11
+pyenv local 3.11
+```
+
+Then clone and run:
+
 ```bash
 git clone https://github.com/caokai1073/Rivus.git
 cd Rivus
