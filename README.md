@@ -107,7 +107,7 @@ Full English and Chinese interface — switches instantly without restart.
 
 ```bash
 git clone https://github.com/caokai1073/Rivus.git
-cd rivus/version1.0.0
+cd Rivus
 
 pip install -r requirements.txt
 
@@ -221,7 +221,7 @@ Look for issues tagged [`good first issue`](https://github.com/caokai1073/Rivus/
 
 ```bash
 git clone https://github.com/caokai1073/Rivus.git
-cd rivus/version1.0.0
+cd Rivus
 pip install -r requirements.txt
 python app.py        # the app hot-reloads HTML/JS changes on refresh
 ```
@@ -311,7 +311,7 @@ If Rivus is useful to you, a ⭐ on GitHub goes a long way.
 
 ```bash
 git clone https://github.com/caokai1073/Rivus.git
-cd rivus/version1.0.0
+cd Rivus
 pip install -r requirements.txt
 python app.py
 ```
