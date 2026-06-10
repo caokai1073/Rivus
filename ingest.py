@@ -19,7 +19,12 @@ def get_embed_model() -> SentenceTransformer:
     global _model
     if _model is None:
         print("[ingest] 加载 embedding 模型 BAAI/bge-m3 ...")
-        _model = SentenceTransformer("BAAI/bge-m3")
+        # 优先离线加载（模型已缓存时不联网）
+        try:
+            _model = SentenceTransformer("BAAI/bge-m3", local_files_only=True)
+        except Exception:
+            # 首次使用，需要下载
+            _model = SentenceTransformer("BAAI/bge-m3")
     return _model
 
 
