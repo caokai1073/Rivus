@@ -21,15 +21,11 @@
 
 <table>
   <tr>
-    <td><img src="docs/example1.png" alt="Screenshot 1" /></td>
-    <td><img src="docs/example2.png" alt="Screenshot 2" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/example3.png" alt="Screenshot 3" /></td>
-    <td><img src="docs/example4.png" alt="Screenshot 4" /></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/example5.png" alt="Screenshot 5" width="50%" /></td>
+    <td width="20%"><img src="docs/example1.png" alt="Screenshot 1" /></td>
+    <td width="20%"><img src="docs/example2.png" alt="Screenshot 2" /></td>
+    <td width="20%"><img src="docs/example3.png" alt="Screenshot 3" /></td>
+    <td width="20%"><img src="docs/example4.png" alt="Screenshot 4" /></td>
+    <td width="20%"><img src="docs/example5.png" alt="Screenshot 5" /></td>
   </tr>
 </table>
 
