@@ -1,0 +1,3445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rivus</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sidebar-bg: #171717;
+    --sidebar-text: #ececec;
+    --sidebar-hover: #2a2a2a;
+    --sidebar-active: #333;
+    --main-bg: #212121;
+    --input-bg: #2f2f2f;
+    --input-border: #404040;
+    --text-primary: #ececec;
+    --text-secondary: #8e8ea0;
+    --user-bubble: #2f2f2f;
+    --accent: #10a37f;
+    --accent-hover: #0d8c6c;
+    --danger: #ef4444;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* 通用别名 */
+    --bg: var(--main-bg);
+    --text: var(--text-primary);
+    --border: #3a3a3a;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --sidebar-bg: #f0f0f0;
+      --sidebar-text: #1a1a1a;
+      --sidebar-hover: #e2e2e2;
+      --sidebar-active: #d5d5d5;
+      --main-bg: #ffffff;
+      --input-bg: #f7f7f8;
+      --input-border: #d4d4d4;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b7280;
+      --user-bubble: #f0f0f0;
+      --accent: #10a37f;
+      --accent-hover: #0d8c6c;
+      --danger: #ef4444;
+      --bg: #ffffff;
+      --text: #1a1a1a;
+      --border: #e0e0e0;
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--main-bg);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 260px;
+    min-width: 160px;
+    max-width: 480px;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    gap: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .resize-handle {
+    width: 4px;
+    background: transparent;
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background .15s;
+    position: relative;
+    z-index: 10;
+  }
+  .resize-handle:hover, .resize-handle.dragging {
+    background: var(--accent);
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 16px;
+    border-bottom: 1px solid #2a2a2a;
+    margin-bottom: 4px;
+  }
+
+  .logo {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .logo-text { font-size: 15px; font-weight: 600; color: var(--sidebar-text); }
+
+  .btn-add {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--sidebar-text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s;
+    width: 100%;
+    text-align: left;
+  }
+  .btn-add:hover { background: var(--sidebar-hover); }
+
+  .sidebar-section {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 12px 10px 6px;
+  }
+
+  .doc-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .doc-list::-webkit-scrollbar { width: 4px; }
+  .doc-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    cursor: default;
+    transition: background .12s;
+    group: true;
+  }
+  .doc-item:hover { background: var(--sidebar-hover); }
+  .doc-item:hover .doc-del { opacity: 1; }
+  .doc-code {
+    font-size: 9px;
+    color: var(--text-secondary);
+    opacity: 0;
+    flex-shrink: 0;
+    font-family: monospace;
+    letter-spacing: .03em;
+    transition: opacity .15s;
+  }
+  .doc-item:hover .doc-code { opacity: .6; }
+
+  .doc-icon { font-size: 14px; flex-shrink: 0; }
+  .doc-title {
+    flex: 1;
+    font-size: 12.5px;
+    color: var(--sidebar-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .doc-source {
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: var(--sidebar-active);
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .doc-del {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    transition: color .12s, opacity .12s;
+    flex-shrink: 0;
+  }
+  .doc-del:hover { color: var(--danger); }
+
+  .empty-docs {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 20px 10px;
+  }
+
+  /* ── Folders ── */
+  .folder-section { display: flex; flex-direction: column; gap: 1px; }
+
+  .folder-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .12s;
+  }
+  .folder-header:hover { background: var(--sidebar-hover); }
+  .folder-header.drag-over { background: rgba(16,163,127,.2); border: 1px dashed var(--accent); }
+
+  .folder-arrow {
+    font-size: 10px; color: var(--text-secondary);
+    transition: transform .15s;
+    width: 10px; flex-shrink: 0;
+  }
+  .folder-arrow.open { transform: rotate(90deg); }
+
+  .folder-name {
+    flex: 1; font-size: 13px; color: var(--sidebar-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .folder-count {
+    font-size: 10px; color: var(--text-secondary);
+    background: var(--sidebar-active); padding: 1px 5px; border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .folder-actions {
+    display: none; gap: 2px; flex-shrink: 0;
+  }
+  .folder-header:hover .folder-actions { display: flex; }
+  .folder-action-btn {
+    background: none; border: none; color: #666; cursor: pointer;
+    font-size: 12px; padding: 1px 3px; border-radius: 4px;
+    transition: color .12s, background .12s;
+  }
+  .folder-action-btn:hover { color: var(--text-primary); background: var(--sidebar-active); }
+  .folder-action-btn.danger:hover { color: var(--danger); }
+
+  .folder-children {
+    display: none; flex-direction: column; gap: 1px;
+    padding-left: 16px;
+  }
+  .folder-children.open { display: flex; }
+
+  /* Uncategorized section label */
+  .uncategorized-label {
+    font-size: 11px; color: var(--text-secondary);
+    padding: 10px 10px 4px;
+    text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+  }
+
+  .doc-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .doc-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  /* drag state on doc items */
+  .doc-item[draggable="true"] { cursor: grab; }
+  .doc-item.dragging { opacity: .4; }
+
+  /* inline rename input */
+  .folder-rename-input {
+    flex: 1; background: var(--sidebar-active); border: 1px solid var(--accent);
+    border-radius: 6px; color: var(--text-primary); font-size: 13px;
+    padding: 1px 6px; outline: none; font-family: var(--font);
+  }
+
+  /* ── Main ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    border-bottom: 1px solid #2a2a2a;
+    gap: 10px;
+  }
+
+  .model-select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .btn-clear, .btn-lang {
+    background: none;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .btn-clear:hover, .btn-lang:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .btn-lang { font-weight: 600; letter-spacing: .03em; }
+
+  /* ── 搜索按钮 ── */
+  .btn-search {
+    background: none;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    padding: 5px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background .15s, color .15s;
+  }
+  .btn-search:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+
+  /* ── 全局搜索 overlay ── */
+  #search-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 120px;
+  }
+  #search-overlay.open { display: flex; }
+
+  #search-modal {
+    background: var(--sidebar-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 600px;
+    max-width: 90vw;
+    max-height: 65vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5);
+  }
+  #search-modal-input-wrap {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+  #search-modal-input-wrap svg { flex-shrink: 0; color: var(--text-secondary); }
+  #search-modal-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 16px;
+  }
+  #search-modal-input::placeholder { color: var(--text-secondary); }
+  #search-modal-results {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .search-result-item {
+    padding: 12px 18px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background .12s;
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: var(--sidebar-hover); }
+  .search-result-title {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .search-result-snippet {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .search-result-meta {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    opacity: .7;
+  }
+  .search-result-empty {
+    padding: 32px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .search-highlight { color: var(--accent); font-weight: 600; }
+
+  /* ── Chat area ── */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .chat-area::-webkit-scrollbar { width: 4px; }
+  .chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text-secondary);
+    padding: 40px;
+    text-align: center;
+  }
+  .welcome .big-logo {
+    width: 72px; height: 72px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .welcome .big-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .welcome h2 { font-size: 22px; color: var(--text-primary); font-weight: 600; }
+  .welcome p { font-size: 14px; max-width: 340px; line-height: 1.6; }
+
+  .message-row {
+    display: flex;
+    padding: 6px 20px;
+    gap: 14px;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .message-row.user { flex-direction: row-reverse; }
+
+  .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .avatar.user-av { background: #5c5c6e; color: white; }
+  .avatar.ai-av { background: var(--accent); color: white; }
+
+  .bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+  }
+  .user .bubble {
+    background: var(--user-bubble);
+    color: var(--text-primary);
+    border-bottom-right-radius: 4px;
+  }
+  .ai .bubble {
+    background: transparent;
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+    padding-left: 0;
+  }
+
+  .sources {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: background .12s, color .12s;
+    max-width: 220px;
+  }
+  .source-chip:hover { background: var(--sidebar-active); color: var(--text-primary); }
+  .source-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .cursor {
+    display: inline-block;
+    width: 2px; height: 14px;
+    background: var(--text-secondary);
+    margin-left: 2px;
+    animation: blink .7s step-end infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── Input area ── */
+  .input-area {
+    padding: 16px 20px 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .input-box {
+    width: 100%;
+    max-width: 800px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 16px;
+    display: flex;
+    align-items: flex-end;
+    padding: 10px 12px 10px 16px;
+    gap: 8px;
+    transition: border-color .15s;
+  }
+  .input-box:focus-within { border-color: #565869; }
+
+  #q-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    resize: none;
+    line-height: 1.5;
+    max-height: 160px;
+    overflow-y: auto;
+    font-family: var(--font);
+  }
+  #q-input::placeholder { color: var(--text-secondary); }
+  #q-input::-webkit-scrollbar { width: 3px; }
+  #q-input::-webkit-scrollbar-thumb { background: #444; }
+
+  .btn-send {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s, opacity .15s;
+    flex-shrink: 0;
+  }
+  .btn-send:disabled { opacity: .4; cursor: default; }
+  .btn-send:not(:disabled):hover { background: var(--accent-hover); }
+  .btn-send svg { width: 16px; height: 16px; fill: white; }
+
+  .btn-stop {
+    width: 34px; height: 34px;
+    background: #ef4444;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  .btn-stop:hover { background: #dc2626; }
+  .btn-stop svg { width: 14px; height: 14px; fill: white; }
+
+  /* ── Context menu ── */
+  /* ── 侧边栏底部设置按钮 ── */
+  .sidebar-footer {
+    padding: 8px 12px;
+    border-top: 1px solid #2a2a2a;
+    flex-shrink: 0;
+  }
+  .btn-settings {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 8px 10px;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    color: var(--sidebar-text);
+    font-size: 13px;
+    cursor: pointer;
+    opacity: .7;
+    transition: opacity .15s, background .15s;
+  }
+  .btn-settings:hover { opacity: 1; background: var(--sidebar-hover); }
+
+  /* ── 设置面板遮罩 ── */
+  .settings-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(0,0,0,.55);
+    align-items: center;
+    justify-content: center;
+  }
+  .settings-overlay.show { display: flex; }
+  .settings-panel {
+    background: var(--main-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: min(560px, 92vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,.5);
+  }
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .settings-title { font-size: 16px; font-weight: 600; }
+  .settings-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-secondary); font-size: 20px; line-height: 1;
+    padding: 2px 6px; border-radius: 6px;
+  }
+  .settings-close:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+  .settings-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 12px 20px 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .settings-tab {
+    padding: 7px 14px;
+    border-radius: 7px 7px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .settings-tab.active {
+    background: var(--main-bg);
+    border-color: var(--border);
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  .settings-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .settings-tab-pane { display: none; }
+  .settings-tab-pane.active { display: block; }
+  .settings-save-row {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .settings-save-row .setup-btn {
+    padding: 9px 22px;
+    font-size: 14px;
+  }
+  .settings-model-section { margin-bottom: 20px; }
+  .settings-model-label {
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+  }
+
+  .ctx-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+  .ctx-danger { color: var(--danger) !important; }
+  .ctx-menu {
+    position: fixed;
+    z-index: 500;
+    background: color-mix(in srgb, var(--main-bg) 92%, #5050ff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    min-width: 120px;
+    display: none;
+  }
+  .ctx-menu.show { display: block; }
+  .ctx-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+  }
+  .ctx-item:hover { background: var(--sidebar-hover); }
+
+  /* ── Reference chip ── */
+  .ref-chip-row {
+    display: none;
+    padding: 0 20px 6px;
+    justify-content: center;
+  }
+  .ref-chip-row.show { display: flex; }
+  .ref-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(16,163,127,.15);
+    border: 1px solid rgba(16,163,127,.4);
+    border-radius: 20px;
+    padding: 4px 10px 4px 12px;
+    font-size: 12px;
+    color: var(--accent);
+    max-width: 460px;
+  }
+  .ref-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref-chip-close {
+    flex-shrink: 0;
+    cursor: pointer;
+    opacity: .7;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .ref-chip-close:hover { opacity: 1; }
+
+  /* ── Setup wizard ── */
+  .setup-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: var(--main-bg);
+    z-index: 200;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 24px 16px;
+  }
+  .setup-overlay.show { display: flex; }
+  /* 引导期间隐藏 app 主体 */
+  body.setup-mode aside,
+  body.setup-mode .resize-handle,
+  body.setup-mode main { visibility: hidden; }
+  .setup-box {
+    background: var(--sidebar-bg);
+    border: 1px solid #2e2e42;
+    border-radius: 20px;
+    padding: 36px 40px;
+    width: 560px;
+    max-width: 100%;
+    margin: auto;
+  }
+  .setup-logo {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px;
+  }
+  .setup-logo img { width: 36px; height: 36px; border-radius: 8px; }
+  .setup-logo h2 { font-size: 20px; font-weight: 600; margin: 0; }
+  .setup-step-title {
+    font-size: 16px; font-weight: 600;
+    margin-bottom: 6px; color: var(--text-primary);
+  }
+  .setup-step-sub {
+    font-size: 13px; color: var(--text-secondary);
+    margin-bottom: 24px; line-height: 1.6;
+  }
+  .ram-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(16,163,127,.12);
+    border: 1px solid rgba(16,163,127,.3);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 13px; color: var(--accent);
+    margin-bottom: 20px;
+  }
+  .model-cards {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .model-card {
+    border: 1px solid #2e2e42;
+    border-radius: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .model-card:hover { border-color: #555; background: rgba(255,255,255,.02); }
+  .model-card.selected { border-color: var(--accent); background: rgba(16,163,127,.07); }
+  .model-card-radio {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid #555;
+    margin-top: 2px; flex-shrink: 0;
+    transition: border-color .15s;
+  }
+  .model-card.selected .model-card-radio {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: inset 0 0 0 3px #1a1a24;
+  }
+  .model-card-info { flex: 1; }
+  .model-card-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .model-card-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .model-card-tag {
+    font-size: 11px; padding: 2px 8px;
+    border-radius: 10px; font-weight: 500;
+    margin-left: 6px;
+  }
+  .tag-rec { background: rgba(16,163,127,.2); color: var(--accent); }
+  .tag-large { background: rgba(99,102,241,.2); color: #818cf8; }
+  .tag-light { background: rgba(245,158,11,.15); color: #fbbf24; }
+  .setup-progress {
+    height: 6px; background: var(--sidebar-active); border-radius: 3px;
+    margin-bottom: 10px; overflow: hidden; display: none;
+  }
+  .setup-progress-bar {
+    height: 100%; background: var(--accent);
+    border-radius: 3px; width: 0%;
+    transition: width .3s;
+  }
+  .setup-progress-label {
+    font-size: 12px; color: var(--text-secondary);
+    margin-bottom: 20px; display: none;
+  }
+  .setup-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    border: none; border-radius: 10px;
+    color: white; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+  }
+  .setup-btn:hover { background: var(--accent-hover); }
+  .setup-btn:disabled { opacity: .4; cursor: default; }
+  .setup-skip {
+    text-align: center; margin-top: 12px;
+    font-size: 12px; color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .setup-skip:hover { color: var(--text-primary); }
+
+  /* ── 模式选择卡片 ── */
+  .mode-cards {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 24px;
+  }
+  .mode-card {
+    border: 1px solid #2e2e42;
+    border-radius: 12px; padding: 18px 16px;
+    cursor: pointer; text-align: center;
+    transition: border-color .15s, background .15s;
+    user-select: none;
+  }
+  .mode-card:hover { border-color: #555; background: rgba(255,255,255,.02); }
+  .mode-card.selected { border-color: var(--accent); background: rgba(16,163,127,.08); }
+  .mode-card-icon { font-size: 28px; margin-bottom: 8px; }
+  .mode-card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .mode-card-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+  /* ── 云端配置 ── */
+  .cloud-provider-block {
+    border: 1px solid #2e2e42; border-radius: 12px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .cloud-provider-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; cursor: pointer;
+    background: rgba(255,255,255,.02);
+  }
+  .cloud-provider-header:hover { background: rgba(255,255,255,.04); }
+  .cloud-provider-name { flex: 1; font-size: 14px; font-weight: 600; }
+  .cloud-provider-status {
+    font-size: 11px; padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .status-configured { background: rgba(16,163,127,.2); color: var(--accent); }
+  .status-empty { background: rgba(255,255,255,.06); color: var(--text-secondary); }
+  .cloud-provider-body { padding: 12px 16px; border-top: 1px solid #2e2e42; }
+  .cloud-provider-body input {
+    width: 100%; background: var(--input-bg);
+    border: 1px solid var(--input-border); border-radius: 8px;
+    padding: 8px 12px; color: var(--text-primary);
+    font-size: 13px; font-family: monospace;
+    margin-top: 6px;
+  }
+  .cloud-provider-body input:focus { outline: none; border-color: var(--accent); }
+  .cloud-key-label { font-size: 12px; color: var(--text-secondary); }
+  .cloud-key-hint { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ── Add modal ── */
+  .overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .overlay.show { display: flex; }
+
+  .modal {
+    background: var(--main-bg);
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 24px;
+    width: 480px;
+    max-width: 95vw;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal h3 { font-size: 16px; font-weight: 600; }
+
+  .tab-row {
+    display: flex;
+    gap: 4px;
+    background: var(--sidebar-hover);
+    border-radius: 10px;
+    padding: 3px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 7px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .tab-btn.active { background: var(--sidebar-active); color: var(--text-primary); }
+
+  .tab-content { display: none; flex-direction: column; gap: 10px; }
+  .tab-content.active { display: flex; }
+
+  /* ── 顶部下载进度横幅 ── */
+  .dl-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: color-mix(in srgb, var(--accent) 10%, var(--main-bg));
+    border-bottom: 1px solid #2a4a2a;
+    font-size: 12px;
+    color: #7ec87e;
+    flex-shrink: 0;
+  }
+  .dl-banner.show { display: flex; }
+  .dl-banner-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: color-mix(in srgb, var(--accent) 12%, var(--main-bg));
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .dl-banner-bar {
+    height: 100%;
+    background: #4caf50;
+    border-radius: 2px;
+    transition: width .3s;
+    width: 0%;
+  }
+  .dl-banner-label { white-space: nowrap; min-width: 140px; text-align: right; }
+  .dl-banner-close {
+    background: none; border: none; color: #7ec87e;
+    font-size: 14px; cursor: pointer; padding: 0 2px; opacity: .6;
+  }
+  .dl-banner-close:hover { opacity: 1; }
+
+  .modal input, .modal textarea {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    padding: 10px 12px;
+    outline: none;
+    font-family: var(--font);
+    transition: border-color .15s;
+    width: 100%;
+    resize: vertical;
+  }
+  .modal input:focus, .modal textarea:focus { border-color: #565869; }
+  .modal textarea { min-height: 100px; }
+
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .btn-cancel {
+    padding: 8px 18px;
+    background: none;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .btn-cancel:hover { background: var(--sidebar-hover); }
+
+  .btn-submit {
+    padding: 8px 18px;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .12s, opacity .12s;
+  }
+  .btn-submit:disabled { opacity: .5; cursor: default; }
+  .btn-submit:not(:disabled):hover { background: var(--accent-hover); }
+
+  .modal-status { font-size: 12.5px; color: var(--text-secondary); min-height: 16px; }
+  .modal-status.error { color: #f87171; }
+  .modal-status.success { color: var(--accent); }
+
+  .modal-folder-select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color .15s;
+  }
+  .modal-folder-select:focus { border-color: #565869; }
+
+  .file-drop {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .file-drop:hover, .file-drop.drag { border-color: var(--accent); background: rgba(16,163,127,.05); }
+  .file-drop input { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo"><img src="/ui/icon.png" alt="Rivus"></div>
+    <span class="logo-text" data-i18n="appName">问渠</span>
+  </div>
+  <button class="btn-add" onclick="createFolder()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+    <span data-i18n="newFolder">新建文件夹</span>
+  </button>
+  <button class="btn-add" onclick="openModal()" style="margin-top:2px">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <span data-i18n="addBookmark">添加收藏</span>
+  </button>
+  <div style="height:1px;background:var(--border);margin:8px 10px 4px"></div>
+  <div class="doc-list" id="doc-list"></div>
+  <div class="sidebar-footer">
+    <button class="btn-settings" onclick="openSettings()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <span data-i18n="settingsBtn">设置</span>
+    </button>
+    <button class="btn-settings" onclick="exportBackup(this)" data-i18n-title="exportBackup" title="导出备份">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span data-i18n="exportBackup">导出备份</span>
+    </button>
+    <button class="btn-settings" onclick="importBackup(this)" title="导入备份">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 14 12 9 17 14"/><line x1="12" y1="9" x2="12" y2="21"/></svg>
+      <span data-i18n="importBackup">导入备份</span>
+    </button>
+    <div id="local-notice" style="font-size:13px;color:var(--sidebar-text);
+         text-align:left;padding:8px 10px;opacity:.7" data-i18n="localNotice">
+      🔒 数据存储在本机
+    </div>
+    <div style="font-size:13px;color:var(--sidebar-text);text-align:left;padding:0 10px 8px;opacity:.7;line-height:1.6">
+      By Kai Cao ·
+      <a href="#" onclick="openUrl('https://github.com/caokai1073/Rivus',event)"
+         style="color:var(--sidebar-text);text-decoration:none;"
+         onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">
+        ⭐ Star on GitHub
+      </a>
+    </div>
+  </div>
+</aside>
+
+<div class="resize-handle" id="resize-handle"></div>
+
+<!-- Main -->
+<main class="main">
+  <div class="topbar">
+    <button class="btn-search" onclick="openSearch()" title="搜索收藏">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </button>
+    <select class="model-select" id="model-select" style="margin-right:auto">
+      <option>加载模型中...</option>
+    </select>
+    <button class="btn-lang" id="lang-btn" onclick="toggleLang()">EN</button>
+    <button class="btn-clear" id="btn-clear" onclick="clearChat()" data-i18n="clearChat">清空对话</button>
+  </div>
+
+  <div class="dl-banner" id="dl-banner">
+    <span>⬇️ 正在下载模型</span>
+    <div class="dl-banner-bar-wrap"><div class="dl-banner-bar" id="dl-banner-bar"></div></div>
+    <span class="dl-banner-label" id="dl-banner-label">连接中...</span>
+    <button class="dl-banner-close" onclick="hideDlBanner()" title="隐藏">✕</button>
+  </div>
+
+  <div id="update-banner" style="display:none;background:#1a6fc4;color:#fff;font-size:12px;
+       padding:6px 14px;display:none;align-items:center;gap:10px;justify-content:center">
+    <span id="update-banner-text"></span>
+    <a id="update-banner-link" href="#" target="_blank"
+       style="color:#fff;font-weight:600;text-decoration:underline"></a>
+    <button onclick="document.getElementById('update-banner').style.display='none'"
+      style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;margin-left:4px">✕</button>
+  </div>
+
+  <div class="chat-area" id="chat-area">
+    <div class="welcome" id="welcome">
+      <div class="big-logo"><img src="/ui/icon.png" alt="Rivus"></div>
+      <h2 data-i18n="appName">问渠</h2>
+      <p data-i18n="welcome">把你的收藏变成可以对话的知识库。<br>先添加一些收藏，然后向我提问。</p>
+    </div>
+  </div>
+
+  <div class="ref-chip-row" id="ref-chip-row">
+    <div class="ref-chip">
+      <span>📎 <span id="ref-chip-title"></span></span>
+      <span class="ref-chip-close" onclick="clearRef()" title="取消引用">✕</span>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-box">
+      <textarea id="q-input" rows="1" placeholder="问我任何关于你收藏内容的问题..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="btn-send" id="send-btn" onclick="sendQuery()" disabled>
+        <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+      </button>
+      <button class="btn-stop" id="stop-btn" onclick="stopQuery()" style="display:none">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+      </button>
+    </div>
+  </div>
+</main>
+
+<!-- 全局搜索 overlay -->
+<div id="search-overlay" onclick="closeSearchIfBg(event)">
+  <div id="search-modal">
+    <div id="search-modal-input-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="search-modal-input" type="text" autocomplete="off"
+        placeholder="搜索收藏内容..."
+        oninput="onSearchInput(this.value)"
+        onkeydown="onSearchKey(event)">
+    </div>
+    <div id="search-modal-results">
+      <div class="search-result-empty" data-i18n="searchDocs">输入关键词搜索收藏...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<!-- 设置面板 -->
+<div class="settings-overlay" id="settings-overlay" onclick="settingsOverlayClick(event)">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <span class="settings-title" data-i18n="settingsTitle">⚙️ 设置</span>
+      <button class="settings-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-tabs">
+      <button class="settings-tab active" id="stab-cloud" onclick="switchSettingsTab('cloud')" data-i18n="settingsTabCloud">☁️ 云端模型</button>
+      <button class="settings-tab" id="stab-local" onclick="switchSettingsTab('local')" data-i18n="settingsTabLocal">🖥️ 本地模型</button>
+    </div>
+    <div class="settings-body">
+      <!-- 云端 tab -->
+      <div class="settings-tab-pane active" id="spane-cloud">
+        <div id="settings-cloud-list"></div>
+      </div>
+      <!-- 本地 tab -->
+      <div class="settings-tab-pane" id="spane-local">
+        <div class="settings-model-section" style="padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:12px">
+          <div id="settings-ollama-status" style="font-size:13px;color:var(--text-secondary)">检测中…</div>
+        </div>
+        <div class="settings-model-section">
+          <div class="settings-model-label" data-i18n="settingsInstalledModels">已安装模型</div>
+          <div id="settings-installed-models" style="color:var(--text-secondary);font-size:13px" data-i18n="settingsLoading">加载中...</div>
+        </div>
+        <div class="settings-model-section">
+          <div class="settings-model-label" data-i18n="settingsDownloadModels">下载新模型</div>
+          <div id="settings-model-cards"></div>
+          <div id="settings-dl-progress" style="display:none;margin-top:12px">
+            <div class="progress-bar-wrap"><div class="progress-bar" id="settings-dl-bar"></div></div>
+            <div class="progress-label" id="settings-dl-label"></div>
+          </div>
+          <button class="setup-btn" id="settings-dl-btn" style="margin-top:12px;display:none"
+                  onclick="settingsDownload()">下载所选模型</button>
+        </div>
+        <!-- Ollama 高级参数 -->
+        <div class="settings-model-section" id="ollama-options-section" style="display:none">
+          <div class="settings-model-label" data-i18n="ollamaOptionsTitle">本地模型参数</div>
+          <div style="display:grid;gap:14px;margin-top:8px">
+
+            <!-- num_ctx -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:13px" data-i18n="ollamaOptCtxLabel">上下文窗口 (num_ctx)</label>
+                <span id="opt-num_ctx-val" style="font-size:12px;color:var(--text-secondary);min-width:50px;text-align:right">4096</span>
+              </div>
+              <input type="range" id="opt-num_ctx" min="512" max="32768" step="512" value="4096"
+                     oninput="document.getElementById('opt-num_ctx-val').textContent=this.value"
+                     style="width:100%;accent-color:var(--accent)">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:2px">
+                <span>512</span><span data-i18n="ollamaOptCtxHint">越大越占显存</span><span>32768</span>
+              </div>
+            </div>
+
+            <!-- temperature -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:13px" data-i18n="ollamaOptTempLabel">随机性 (temperature)</label>
+                <span id="opt-temperature-val" style="font-size:12px;color:var(--text-secondary);min-width:50px;text-align:right">0.8</span>
+              </div>
+              <input type="range" id="opt-temperature" min="0" max="2" step="0.05" value="0.8"
+                     oninput="document.getElementById('opt-temperature-val').textContent=parseFloat(this.value).toFixed(2)"
+                     style="width:100%;accent-color:var(--accent)">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:2px">
+                <span data-i18n="ollamaOptTempLow">保守</span><span data-i18n="ollamaOptTempHigh">创意</span>
+              </div>
+            </div>
+
+            <!-- top_p -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:13px">Top-P</label>
+                <span id="opt-top_p-val" style="font-size:12px;color:var(--text-secondary);min-width:50px;text-align:right">0.9</span>
+              </div>
+              <input type="range" id="opt-top_p" min="0" max="1" step="0.05" value="0.9"
+                     oninput="document.getElementById('opt-top_p-val').textContent=parseFloat(this.value).toFixed(2)"
+                     style="width:100%;accent-color:var(--accent)">
+            </div>
+
+            <!-- repeat_penalty -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:13px" data-i18n="ollamaOptRepeatLabel">重复惩罚 (repeat_penalty)</label>
+                <span id="opt-repeat_penalty-val" style="font-size:12px;color:var(--text-secondary);min-width:50px;text-align:right">1.1</span>
+              </div>
+              <input type="range" id="opt-repeat_penalty" min="1" max="2" step="0.05" value="1.1"
+                     oninput="document.getElementById('opt-repeat_penalty-val').textContent=parseFloat(this.value).toFixed(2)"
+                     style="width:100%;accent-color:var(--accent)">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:2px">
+                <span data-i18n="ollamaOptRepeatLow">允许重复</span><span data-i18n="ollamaOptRepeatHigh">强力去重</span>
+              </div>
+            </div>
+
+            <!-- num_predict -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <label style="font-size:13px" data-i18n="ollamaOptPredictLabel">最大输出 token (num_predict)</label>
+                <span id="opt-num_predict-val" style="font-size:12px;color:var(--text-secondary);min-width:50px;text-align:right" data-i18n="ollamaOptPredictUnlimited">不限</span>
+              </div>
+              <input type="range" id="opt-num_predict" min="-1" max="4096" step="128" value="-1"
+                     oninput="document.getElementById('opt-num_predict-val').textContent=
+                       this.value=='-1'? (lang==='zh'?'不限':'Unlimited') : this.value"
+                     style="width:100%;accent-color:var(--accent)">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:2px">
+                <span data-i18n="ollamaOptPredictUnlimitedShort">不限</span><span>4096</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-save-row" id="settings-cloud-footer">
+      <button class="setup-btn" onclick="saveSettingsCloud()" data-i18n="settingsSave">保存</button>
+    </div>
+    <div class="settings-save-row" id="settings-local-footer" style="display:none">
+      <button class="setup-btn" onclick="saveOllamaOptions()" data-i18n="settingsSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-item" onclick="ctxQuote()">📎 <span data-i18n="ctxQuote">引用</span></div>
+  <div class="ctx-item" onclick="ctxRename()">✏️ <span data-i18n="ctxRename">改名</span></div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item ctx-danger" onclick="ctxDelete()">🗑️ <span data-i18n="ctxDelete">删除</span></div>
+</div>
+
+<!-- Setup wizard -->
+<div class="setup-overlay" id="setup-overlay">
+  <div class="setup-box">
+    <div class="setup-logo">
+      <img src="/ui/icon.png" alt="Rivus">
+      <h2>欢迎使用 Rivus · 问渠</h2>
+    </div>
+
+    <!-- Phase 0: 选择模式 -->
+    <div id="setup-phase-mode" style="display:none">
+      <div class="setup-step-title">选择 AI 模式</div>
+      <div class="setup-step-sub">问渠支持本地运行和云端 API 两种方式，可以同时启用。</div>
+      <div class="mode-cards">
+        <div class="mode-card selected" id="mode-card-local" onclick="toggleMode('local')">
+          <div class="mode-card-icon">🖥️</div>
+          <div class="mode-card-title">本地模型</div>
+          <div class="mode-card-desc">完全离线<br>数据不出本机<br>需下载模型文件</div>
+        </div>
+        <div class="mode-card" id="mode-card-cloud" onclick="toggleMode('cloud')">
+          <div class="mode-card-icon">☁️</div>
+          <div class="mode-card-title">云端模型</div>
+          <div class="mode-card-desc">DeepSeek / OpenAI / Claude<br>需要 API Key<br>无需本地算力</div>
+        </div>
+      </div>
+      <button class="setup-btn" id="mode-next-btn" onclick="modeNext()">下一步</button>
+      <div class="setup-skip" onclick="setupSkip()">跳过，稍后配置</div>
+    </div>
+
+    <!-- Phase ollama: 安装 Ollama -->
+    <div id="setup-phase-ollama" style="display:none">
+      <div class="setup-step-title">安装 Ollama 运行环境</div>
+      <div class="setup-step-sub">
+        问渠使用 <strong>Ollama</strong> 在本地运行 AI 模型，全程不联网、不上传数据。<br>
+        未检测到 Ollama，点击下方按钮自动下载安装（约 100 MB）。
+      </div>
+      <div class="setup-progress" id="ollama-progress" style="display:none">
+        <div class="setup-progress-bar" id="ollama-progress-bar"></div>
+      </div>
+      <div class="setup-progress-label" id="ollama-progress-label" style="display:none"></div>
+      <button class="setup-btn" id="ollama-install-btn" onclick="installOllama()">下载并安装 Ollama</button>
+      <div class="setup-skip" onclick="ollamaSkipToNext()">跳过（已自行安装）</div>
+    </div>
+
+    <!-- Phase model: 选择本地模型 -->
+    <div id="setup-phase-model" style="display:none">
+      <div class="setup-step-title">选择本地 AI 模型</div>
+      <div class="setup-step-sub">选择一个模型下载到本机。首次下载需要几分钟，之后无需联网。</div>
+      <div class="ram-badge" id="setup-ram" style="display:none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4M10 6V4M14 6V4M18 6V4M6 18v2M10 18v2M14 18v2M18 18v2"/></svg>
+        <span id="setup-ram-label">检测中...</span>
+      </div>
+      <div class="model-cards" id="setup-model-cards"></div>
+      <div class="setup-progress" id="setup-progress" style="display:none">
+        <div class="setup-progress-bar" id="setup-progress-bar"></div>
+      </div>
+      <div class="setup-progress-label" id="setup-progress-label" style="display:none"></div>
+      <button class="setup-btn" id="setup-btn" onclick="setupDownload()" disabled>下载模型</button>
+      <div class="setup-skip" onclick="localSkipToNext()">跳过，稍后下载</div>
+    </div>
+
+    <!-- Phase cloud: 配置云端 API -->
+    <div id="setup-phase-cloud" style="display:none">
+      <div class="setup-step-title">配置云端模型 API</div>
+      <div class="setup-step-sub">填入至少一个 API Key 即可使用对应服务。密钥仅保存在本机。</div>
+      <div id="cloud-provider-list"></div>
+      <button class="setup-btn" onclick="saveCloudConfig()">保存并完成</button>
+      <div class="setup-skip" onclick="setupSkip()">跳过</div>
+    </div>
+
+    <!-- 初始检测中 -->
+    <div id="setup-phase-loading">
+      <div class="setup-step-sub" style="text-align:center;padding:24px 0">正在检测环境...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Add modal -->
+<div class="overlay" id="overlay" onclick="closeModalIfBg(event)">
+  <div class="modal">
+    <h3 data-i18n="addBookmark">添加收藏</h3>
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('url', this)">🔗 URL</button>
+      <button class="tab-btn" onclick="switchTab('text', this)" data-i18n="tabText">📝 文本</button>
+      <button class="tab-btn" onclick="switchTab('pdf', this)">📄 PDF</button>
+      <button class="tab-btn" onclick="switchTab('docx', this)">📝 Word</button>
+    </div>
+
+    <div class="tab-content active" id="tab-url">
+      <input id="url-input" type="url" placeholder="https://example.com/article" />
+      <input id="url-title" type="text" data-i18n-placeholder="customTitleHint" placeholder="自定义标题（留空则自动提取）" />
+    </div>
+    <div class="tab-content" id="tab-text">
+      <input id="text-title" type="text" data-i18n-placeholder="titlePlaceholder" placeholder="标题" />
+      <textarea id="text-body" data-i18n-placeholder="textPlaceholder" placeholder="粘贴文章或笔记内容..." rows="5"></textarea>
+    </div>
+    <div class="tab-content" id="tab-pdf">
+      <input id="pdf-title" type="text" data-i18n-placeholder="pdfTitleHint" placeholder="自定义标题（留空则使用文件名）" />
+      <div class="file-drop" id="pdf-drop"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)"
+          onclick="pickPDF()">
+        <input type="file" id="pdf-file" accept=".pdf" onchange="updateDropLabel()" style="display:none" />
+        <div id="drop-label" data-i18n="dropPDF">点击选择或拖入 PDF 文件</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-docx">
+      <input id="docx-title" type="text" data-i18n-placeholder="pdfTitleHint" placeholder="自定义标题（留空则使用文件名）" />
+      <div class="file-drop" id="docx-drop"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDocxDrop(event)"
+          onclick="pickDocx()">
+        <input type="file" id="docx-file" accept=".docx" onchange="updateDocxLabel()" style="display:none" />
+        <div id="docx-label" data-i18n="dropDocx">点击选择或拖入 Word 文件</div>
+      </div>
+    </div>
+
+    <select id="folder-select" class="modal-folder-select">
+      <option value="" data-i18n="noFolder">📂 不加入文件夹</option>
+    </select>
+
+    <div class="modal-status" id="modal-status"></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()" data-i18n="cancel">取消</button>
+      <button class="btn-submit" id="submit-btn" onclick="submitAdd()" data-i18n="add">添加</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentTab = 'url';
+let isStreaming = false;
+let _queryEs = null;       // module-level EventSource so stopQuery() can close it
+let _activeCursor = null;  // reference to the blinking cursor element
+let pinnedDoc = null;  // { id, title } — 当前引用的文档
+
+// ── Context menu ──────────────────────────────────────
+let ctxTargetDoc = null;
+const ctxMenu = document.getElementById('ctx-menu');
+
+function showCtxMenu(e, docId, docTitle) {
+  e.preventDefault();
+  e.stopPropagation();
+  ctxTargetDoc = { id: docId, title: docTitle };
+  ctxMenu.style.left = e.clientX + 'px';
+  ctxMenu.style.top  = e.clientY + 'px';
+  ctxMenu.classList.add('show');
+}
+
+function hideCtxMenu() { ctxMenu.classList.remove('show'); }
+
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest('.doc-item')) hideCtxMenu();
+});
+
+function fmtCode(createdAt) {
+  if (!createdAt) return '';
+  // "2024-06-15 14:30:22" → "240615·143022"
+  const s = createdAt.replace(/[-: ]/g, '');
+  return s.slice(2, 8) + '·' + s.slice(8, 14);
+}
+
+async function ctxRename() {
+  hideCtxMenu();
+  if (!ctxTargetDoc) return;
+  const cur = ctxTargetDoc.title;
+  const newName = prompt(lang === 'zh' ? `重命名「${cur}」：` : `Rename "${cur}":`, cur);
+  if (!newName || !newName.trim() || newName.trim() === cur) return;
+  const fd = new FormData();
+  fd.append('title', newName.trim());
+  const res = await fetch(`/api/docs/${ctxTargetDoc.id}/title`, { method: 'PATCH', body: fd });
+  if (res.ok) await loadDocs();
+}
+
+async function ctxDelete() {
+  hideCtxMenu();
+  if (!ctxTargetDoc) return;
+  const msg = lang === 'zh'
+    ? `确认删除「${ctxTargetDoc.title}」？`
+    : `Delete "${ctxTargetDoc.title}"?`;
+  if (!confirm(msg)) return;
+  await fetch(`/api/docs/${ctxTargetDoc.id}`, { method: 'DELETE' });
+  await loadDocs();
+}
+
+function ctxQuote() {
+  hideCtxMenu();
+  if (!ctxTargetDoc) return;
+  pinnedDoc = ctxTargetDoc;
+  document.getElementById('ref-chip-title').textContent = pinnedDoc.title;
+  document.getElementById('ref-chip-row').classList.add('show');
+  document.getElementById('q-input').focus();
+  updateSendBtn();
+}
+
+function clearRef() {
+  pinnedDoc = null;
+  document.getElementById('ref-chip-row').classList.remove('show');
+}
+
+// ── Setup wizard ──────────────────────────────────────
+
+// 模型推荐表（按最低内存排序）
+const MODEL_CATALOG = [
+  {
+    id: 'qwen3.5:4b',
+    name: 'Qwen3.5 · 4B',
+    desc: '体积小（3.4 GB），性能与速度兼顾，适合 8 GB 以下设备。',
+    descEn: 'Compact (3.4 GB). Good balance of speed and quality for devices under 8 GB RAM.',
+    minRam: 0,
+    tag: 'light',
+    tagLabel: '轻量',
+    tagLabelEn: 'Lightweight',
+  },
+  {
+    id: 'qwen3.5:9b',
+    name: 'Qwen3.5 · 9B',
+    desc: '官方默认版本（6.6 GB），中英文综合性能优秀。推荐大多数用户使用。',
+    descEn: 'Default model (6.6 GB). Excellent bilingual performance. Recommended for most users.',
+    minRam: 8,
+    tag: 'rec',
+    tagLabel: '推荐',
+    tagLabelEn: 'Recommended',
+  },
+  {
+    id: 'qwen3.5:27b',
+    name: 'Qwen3.5 · 27B',
+    desc: '强推理能力（17 GB），适合复杂知识问答场景。',
+    descEn: 'Strong reasoning (17 GB). Best for complex Q&A tasks.',
+    minRam: 24,
+    tag: 'large',
+    tagLabel: '高性能',
+    tagLabelEn: 'High-end',
+  },
+  {
+    id: 'gemma4:12b',
+    name: 'Gemma 4 · 12B',
+    desc: 'Google 最新一代，多模态支持，推理能力强（7.6 GB）。',
+    descEn: "Google's latest generation, multimodal support, strong reasoning (7.6 GB).",
+    minRam: 10,
+    tag: 'large',
+    tagLabel: '高性能',
+    tagLabelEn: 'High-end',
+  },
+  {
+    id: 'gemma4:26b',
+    name: 'Gemma 4 · 26B',
+    desc: '旗舰推理能力（18 GB），适合高要求场景。',
+    descEn: 'Flagship reasoning (18 GB). For demanding use cases.',
+    minRam: 24,
+    tag: 'large',
+    tagLabel: '旗舰',
+    tagLabelEn: 'Flagship',
+  },
+];
+
+// ── 平台检测（从后端读取，前端 navigator.platform 在 pywebview 里不可靠）──
+let IS_WINDOWS = false;
+(async () => {
+  try {
+    const r = await fetch('/api/system-info');
+    const d = await r.json();
+    IS_WINDOWS = d.platform === 'Windows';
+  } catch(e) {}
+})();
+
+// ── Setup wizard state ────────────────────────────────
+let setupSelectedModel = null;
+let setupRamGb = 0;
+let setupModes = new Set(['local']);   // 'local' | 'cloud'
+let setupQueue = [];                   // ['ollama','model','cloud'] — 待执行阶段队列
+
+const ALL_PHASES = ['loading','mode','ollama','model','cloud'];
+
+function showSetupPhase(phase) {
+  ALL_PHASES.forEach(p => {
+    document.getElementById(`setup-phase-${p}`).style.display = (p === phase) ? '' : 'none';
+  });
+}
+
+// ── Phase 0: 模式选择 ─────────────────────────────────
+function toggleMode(mode) {
+  const card = document.getElementById(`mode-card-${mode}`);
+  if (setupModes.has(mode)) {
+    if (setupModes.size === 1) return; // 至少选一个
+    setupModes.delete(mode);
+    card.classList.remove('selected');
+  } else {
+    setupModes.add(mode);
+    card.classList.add('selected');
+  }
+}
+
+async function modeNext() {
+  // 构建执行队列
+  setupQueue = [];
+  if (setupModes.has('local')) {
+    const ollamaRes = await fetch('/api/ollama-status');
+    const ollama = await ollamaRes.json();
+    if (!ollama.installed) setupQueue.push('ollama');
+    else if (!ollama.running) {
+      showSetupPhase('loading');
+      document.querySelector('#setup-phase-loading .setup-step-sub').textContent = '正在启动 Ollama...';
+      await fetch('/api/ollama-start', { method: 'POST' });
+    }
+    setupQueue.push('model');
+  }
+  if (setupModes.has('cloud')) setupQueue.push('cloud');
+  runNextPhase();
+}
+
+function runNextPhase() {
+  if (setupQueue.length === 0) { setupDone(); return; }
+  const next = setupQueue.shift();
+  if (next === 'ollama') showOllamaPhase();
+  else if (next === 'model') showLocalModelPhase();
+  else if (next === 'cloud') showCloudPhase();
+}
+
+function showOllamaPhase() {
+  showSetupPhase('ollama');
+  if (IS_WINDOWS) {
+    const lang = currentLang;
+    document.querySelector('#setup-phase-ollama .setup-step-sub').innerHTML =
+      lang === 'zh'
+        ? '问渠使用 <strong>Ollama</strong> 在本地运行 AI 模型，全程不联网、不上传数据。<br>请前往 Ollama 官网下载并安装 Windows 版本，完成后点击「已安装，继续」。'
+        : 'Rivus uses <strong>Ollama</strong> to run AI models locally — no data ever leaves your computer.<br>Please download and install Ollama for Windows, then click "Already installed, continue".';
+    const btn = document.getElementById('ollama-install-btn');
+    btn.textContent = lang === 'zh' ? '打开 Ollama 官网' : 'Open ollama.com';
+    btn.onclick = () => {
+      window.pywebview?.api?.open_url('https://ollama.com');
+    };
+    document.querySelector('#setup-phase-ollama .setup-skip').textContent =
+      lang === 'zh' ? '已安装，继续' : 'Already installed, continue';
+  }
+}
+
+// ── Phase ollama ──────────────────────────────────────
+async function installOllama() {
+  if (IS_WINDOWS) {
+    window.pywebview?.api?.open_url('https://ollama.com');
+    return;
+  }
+  const btn = document.getElementById('ollama-install-btn');
+  btn.disabled = true; btn.textContent = t('pullDownloading');
+  const progressWrap = document.getElementById('ollama-progress');
+  const progressBar  = document.getElementById('ollama-progress-bar');
+  const progressLabel = document.getElementById('ollama-progress-label');
+  progressWrap.style.display = 'block';
+  progressLabel.style.display = 'block';
+
+  const es = new EventSource('/api/ollama-install');
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.pct) progressBar.style.width = d.pct + '%';
+    progressLabel.textContent = d.status || '';
+    if (d.done) {
+      es.close();
+      if (d.status === 'error') {
+        progressLabel.textContent = t('settingsInstallFailed') + (d.error || '');
+        btn.textContent = t('settingsRetry'); btn.disabled = false;
+      } else {
+        progressLabel.textContent = t('settingsInstallDone');
+        progressBar.style.width = '100%';
+        setTimeout(runNextPhase, 800);
+      }
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    progressLabel.textContent = t('setupNetworkError');
+    btn.textContent = t('settingsRetry'); btn.disabled = false;
+  };
+}
+
+function ollamaSkipToNext() { runNextPhase(); }
+
+// ── Phase model ───────────────────────────────────────
+function showLocalModelPhase() {
+  showSetupPhase('model');
+  const ram = setupRamGb;
+  document.getElementById('setup-ram').style.display = '';
+  document.getElementById('setup-ram-label').textContent =
+    ram > 0 ? `检测到内存：${ram} GB` : '内存检测失败，显示全部选项';
+  const available   = MODEL_CATALOG.filter(m => ram === 0 || ram >= m.minRam);
+  const unavailable = MODEL_CATALOG.filter(m => ram > 0  && ram < m.minRam);
+  renderModelCards(available, unavailable, ram);
+}
+
+function renderModelCards(available, unavailable, ram) {
+  const container = document.getElementById('setup-model-cards');
+  const preferred = available.find(m => m.tag === 'rec') || available[0];
+  if (preferred) {
+    setupSelectedModel = preferred.id;
+    document.getElementById('setup-btn').disabled = false;
+  }
+  const makeCard = (m, disabled) => {
+    const label  = lang === 'zh' ? m.tagLabel  : m.tagLabelEn;
+    const desc   = lang === 'zh' ? m.desc      : m.descEn;
+    const memReq = lang === 'zh' ? `需要至少 ${m.minRam} GB 内存` : `Requires at least ${m.minRam} GB RAM`;
+    const tagHtml  = `<span class="model-card-tag tag-${m.tag}">${label}</span>`;
+    const dimStyle = disabled ? 'opacity:.4;pointer-events:none;' : '';
+    const sel      = m.id === setupSelectedModel ? 'selected' : '';
+    return `<div class="model-card ${sel}" style="${dimStyle}" onclick="selectModel('${m.id}')">
+      <div class="model-card-radio"></div>
+      <div class="model-card-info">
+        <div class="model-card-name">${m.name}${tagHtml}</div>
+        <div class="model-card-desc">${desc}${disabled ? `<br><em>${memReq}</em>` : ''}</div>
+      </div>
+    </div>`;
+  };
+  container.innerHTML =
+    available.map(m => makeCard(m, false)).join('') +
+    (unavailable.length ? `<div style="font-size:12px;color:var(--text-secondary);margin:8px 0 4px">${t('settingsMemInsufficient')}</div>` : '') +
+    unavailable.map(m => makeCard(m, true)).join('');
+}
+
+function selectModel(id) {
+  setupSelectedModel = id;
+  document.querySelectorAll('.model-card').forEach(el => {
+    const match = el.getAttribute('onclick') === `selectModel('${id}')`;
+    el.classList.toggle('selected', match);
+  });
+  document.getElementById('setup-btn').disabled = false;
+}
+
+async function setupDownload() {
+  if (!setupSelectedModel) return;
+  const btn = document.getElementById('setup-btn');
+  btn.disabled = true; btn.textContent = t('pullDownloading');
+  const progressWrap  = document.getElementById('setup-progress');
+  const progressBar   = document.getElementById('setup-progress-bar');
+  const progressLabel = document.getElementById('setup-progress-label');
+  progressWrap.style.display = 'block';
+  progressLabel.style.display = 'block';
+  progressLabel.textContent = t('settingsConnecting');
+  document.querySelector('#setup-phase-model .setup-skip').style.display = 'none';
+
+  const es = new EventSource(`/api/pull-model?model=${encodeURIComponent(setupSelectedModel)}`);
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.pct) progressBar.style.width = d.pct + '%';
+    progressLabel.textContent = pullProgressLabel(d);
+    if (d.done) {
+      es.close();
+      if (d.status === 'error') {
+        progressLabel.textContent = t('settingsDownloadFailed') + (d.error || '');
+        btn.textContent = t('settingsRetry'); btn.disabled = false;
+        document.querySelector('#setup-phase-model .setup-skip').style.display = '';
+      } else {
+        progressLabel.textContent = t('settingsDownloadDone');
+        progressBar.style.width = '100%';
+        setTimeout(runNextPhase, 800);
+      }
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    progressLabel.textContent = t('settingsConnectFailed');
+    btn.textContent = t('settingsRetry'); btn.disabled = false;
+    document.querySelector('#setup-phase-model .setup-skip').style.display = '';
+  };
+}
+
+function localSkipToNext() { runNextPhase(); }
+
+// ── Phase cloud ───────────────────────────────────────
+const CLOUD_PROVIDERS_UI = {
+  deepseek:  { name: 'DeepSeek',           hint: '从 platform.deepseek.com 获取',  hintEn: 'Get from platform.deepseek.com',  icon: '🤖' },
+  openai:    { name: 'OpenAI / ChatGPT',   hint: '从 platform.openai.com 获取',    hintEn: 'Get from platform.openai.com',    icon: '🟢' },
+  anthropic: { name: 'Anthropic / Claude', hint: '从 console.anthropic.com 获取',  hintEn: 'Get from console.anthropic.com',  icon: '🔶' },
+  minimax:   { name: 'MiniMax',            hint: '从 platform.minimax.chat 获取',  hintEn: 'Get from platform.minimax.chat',  icon: '🟣' },
+  glm:       { name: '智谱 GLM',            hint: '从 open.bigmodel.cn 获取',       hintEn: 'Get from open.bigmodel.cn',       icon: '🔵' },
+};
+
+function showCloudPhase() {
+  showSetupPhase('cloud');
+  const list = document.getElementById('cloud-provider-list');
+  list.innerHTML = Object.entries(CLOUD_PROVIDERS_UI).map(([pid, meta]) => `
+    <div class="cloud-provider-block">
+      <div class="cloud-provider-header" onclick="toggleCloudBlock('${pid}')">
+        <span style="font-size:18px">${meta.icon}</span>
+        <span class="cloud-provider-name">${meta.name}</span>
+        <span class="cloud-provider-status status-empty" id="cloud-status-${pid}">未配置</span>
+      </div>
+      <div class="cloud-provider-body" id="cloud-body-${pid}" style="display:none">
+        <div class="cloud-key-label">API Key</div>
+        <input type="password" id="cloud-key-${pid}"
+               placeholder="粘贴你的 API Key..."
+               oninput="onCloudKeyInput('${pid}')" />
+        <div class="cloud-key-hint">${meta.hint}</div>
+      </div>
+    </div>
+  `).join('');
+  // 默认展开第一个
+  toggleCloudBlock('deepseek');
+}
+
+function toggleCloudBlock(pid) {
+  Object.keys(CLOUD_PROVIDERS_UI).forEach(p => {
+    const body = document.getElementById(`cloud-body-${p}`);
+    if (p === pid) body.style.display = body.style.display === 'none' ? '' : 'none';
+    else body.style.display = 'none';
+  });
+}
+
+function onCloudKeyInput(pid) {
+  const val = document.getElementById(`cloud-key-${pid}`).value.trim();
+  const statusEl = document.getElementById(`cloud-status-${pid}`);
+  if (val) {
+    statusEl.textContent = '已填写';
+    statusEl.className = 'cloud-provider-status status-configured';
+  } else {
+    statusEl.textContent = '未配置';
+    statusEl.className = 'cloud-provider-status status-empty';
+  }
+}
+
+async function saveCloudConfig() {
+  const payload = {};
+  Object.keys(CLOUD_PROVIDERS_UI).forEach(pid => {
+    const key = document.getElementById(`cloud-key-${pid}`)?.value.trim();
+    if (key) payload[pid] = { api_key: key, enabled: true };
+  });
+  if (Object.keys(payload).length > 0) {
+    await fetch('/api/cloud-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+  runNextPhase();
+}
+
+// ── 公共 ──────────────────────────────────────────────
+function setupSkip() {
+  document.getElementById('setup-overlay').classList.remove('show');
+  document.body.classList.remove('setup-mode');
+}
+
+async function setupDone() {
+  document.getElementById('setup-overlay').classList.remove('show');
+  document.body.classList.remove('setup-mode');
+  await loadModels();
+  if (setupSelectedModel) {
+    const sel = document.getElementById('model-select');
+    for (const opt of sel.options) {
+      if (opt.value === setupSelectedModel) { opt.selected = true; break; }
+    }
+  }
+}
+
+async function checkSetup() {
+  try {
+    const sysRes = await fetch('/api/system-info');
+    const sysInfo = await sysRes.json();
+    setupRamGb = sysInfo.ram_gb || 0;
+    IS_WINDOWS = sysInfo.platform === 'Windows';
+
+    // 已有本地模型且已有云端配置 → 跳过
+    const cloudRes = await fetch('/api/cloud-config');
+    const cloudCfg = await cloudRes.json();
+    const hasCloud = Object.values(cloudCfg).some(v => v.configured);
+    if (sysInfo.installed_models?.length > 0 || hasCloud) return;
+
+    // 显示引导
+    document.body.classList.add('setup-mode');
+    document.getElementById('setup-overlay').classList.add('show');
+    showSetupPhase('mode');
+  } catch(e) {
+    console.error('setup check failed', e);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────
+async function init() {
+  applyLang();
+  await loadDocs();
+  await loadModels();
+  checkSetup();
+  checkEmbedReady();   // 预热状态提示
+  checkForUpdate();    // 静默检查更新
+  document.getElementById('q-input').addEventListener('input', () => {
+    const v = document.getElementById('q-input').value.trim();
+    document.getElementById('send-btn').disabled = !v || isStreaming;
+  });
+}
+
+// ── Embedding 预热提示 ────────────────────────────────
+async function checkEmbedReady() {
+  try {
+    const r = await fetch('/api/embed-ready');
+    const d = await r.json();
+    if (d.ready) return;
+    // 未就绪时显示淡提示，每 3 秒重检
+    const qi = document.getElementById('q-input');
+    const orig = qi.placeholder;
+    qi.placeholder = t('embedLoading');
+    const poll = setInterval(async () => {
+      try {
+        const r2 = await fetch('/api/embed-ready');
+        if ((await r2.json()).ready) {
+          clearInterval(poll);
+          qi.placeholder = t('inputPlaceholder');
+        }
+      } catch { clearInterval(poll); }
+    }, 3000);
+  } catch { /* 忽略 */ }
+}
+
+// ── 自动更新检测 ──────────────────────────────────────
+async function checkForUpdate() {
+  try {
+    const r = await fetch('/api/version');
+    const d = await r.json();
+    if (!d.update_available) return;
+    const banner = document.getElementById('update-banner');
+    document.getElementById('update-banner-text').textContent =
+      t('updateAvail') + ' v' + d.latest;
+    const link = document.getElementById('update-banner-link');
+    link.textContent = t('updateDownload');
+    link.href = d.url || '#';
+    banner.style.display = 'flex';
+  } catch { /* 静默失败 */ }
+}
+
+// ── 错误信息翻译 ──────────────────────────────────────
+function friendlyError(raw) {
+  if (!raw) return t('errGeneric');
+  if (/扫描版|scan|image.only|ocr/i.test(raw))    return t('errScanned');
+  if (/为空|empty|no content/i.test(raw))         return t('errEmpty');
+  if (/network|connection|连接|网络/i.test(raw))   return t('errNetwork');
+  if (/timeout|timed out|超时/i.test(raw))        return t('errTimeout');
+  return t('errGeneric');
+}
+
+// ── 文档搜索过滤 ──────────────────────────────────────
+let _allDocItems = [];  // 缓存渲染后的 HTML 片段用于过滤
+
+// ── 全局搜索 overlay ─────────────────────────────────────
+let _searchTimer = null;
+
+function openSearch() {
+  const overlay = document.getElementById('search-overlay');
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('search-modal-input').focus(), 50);
+}
+
+function closeSearch() {
+  document.getElementById('search-overlay').classList.remove('open');
+  document.getElementById('search-modal-input').value = '';
+  document.getElementById('search-modal-results').innerHTML =
+    '<div class="search-result-empty">' + (lang === 'zh' ? '输入关键词搜索收藏...' : 'Type to search your bookmarks...') + '</div>';
+}
+
+function closeSearchIfBg(e) {
+  if (e.target === document.getElementById('search-overlay')) closeSearch();
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Escape') closeSearch();
+}
+
+function onSearchInput(value) {
+  clearTimeout(_searchTimer);
+  const q = value.trim();
+  if (!q) {
+    document.getElementById('search-modal-results').innerHTML =
+      '<div class="search-result-empty">' + (lang === 'zh' ? '输入关键词搜索收藏...' : 'Type to search your bookmarks...') + '</div>';
+    return;
+  }
+  _searchTimer = setTimeout(() => _doSearch(q), 250);
+}
+
+function _highlight(text, q) {
+  if (!text || !q) return text || '';
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(esc, 'gi'), m => '<span class="search-highlight">' + m + '</span>');
+}
+
+function _snippet(text, q, radius = 80) {
+  if (!text || !q) return '';
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return '';
+  const start = Math.max(0, idx - radius / 2);
+  const end   = Math.min(text.length, idx + q.length + radius);
+  let s = text.slice(start, end);
+  if (start > 0) s = '…' + s;
+  if (end < text.length) s = s + '…';
+  return s;
+}
+
+async function _doSearch(q) {
+  const results = document.getElementById('search-modal-results');
+  results.innerHTML = '<div class="search-result-empty">' + (lang === 'zh' ? '搜索中...' : 'Searching...') + '</div>';
+  try {
+    const res = await fetch('/api/docs?q=' + encodeURIComponent(q));
+    const docs = await res.json();
+    if (!docs.length) {
+      results.innerHTML = '<div class="search-result-empty">' + (lang === 'zh' ? '没有匹配的收藏' : 'No results found') + '</div>';
+      return;
+    }
+    results.innerHTML = docs.map(doc => {
+      const titleHL = _highlight((doc.title || '').replace(/</g,'&lt;'), q);
+      const src = doc.source ? `<span style="font-size:10px;background:var(--input-bg);border-radius:4px;padding:1px 5px;color:var(--text-secondary);margin-right:6px">${doc.source}</span>` : '';
+      // 优先从 summary 取片段，次选 full_text（summary 里找不到的词可能在正文）
+      const rawSnip = _snippet(doc.summary || '', q) || '';
+      const snippetHL = rawSnip ? _highlight(rawSnip.replace(/</g,'&lt;'), q) : '';
+      const snippetDiv = snippetHL ? `<div class="search-result-snippet">${snippetHL}</div>` : '';
+      const escaped = (doc.title || '').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      return `<div class="search-result-item" onclick="pickSearchResult(${doc.id},'${escaped}')">
+        <div class="search-result-title">${src}${titleHL}</div>
+        ${snippetDiv}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    results.innerHTML = '<div class="search-result-empty">' + (lang === 'zh' ? '搜索失败' : 'Search failed') + '</div>';
+  }
+}
+
+function pickSearchResult(docId, title) {
+  closeSearch();
+  selectDoc(docId, title);
+}
+
+// Cmd+K / Ctrl+K 打开搜索
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openSearch();
+  }
+});
+
+// ── 导出备份 ──────────────────────────────────────────
+async function exportBackup(btn) {
+  const span = btn ? btn.querySelector('span') : null;
+  // 1. 弹系统"另存为"对话框，让用户选择保存位置
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultName = `rivus-backup-${today}.zip`;
+  let savePath = null;
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_save_path) {
+    try { savePath = await window.pywebview.api.pick_save_path(defaultName); } catch(e) {}
+  }
+  if (!savePath) return;  // 用户取消
+
+  if (btn) btn.disabled = true;
+  if (span) span.textContent = lang === 'zh' ? '导出中...' : 'Exporting...';
+  try {
+    const res = await fetch('/api/export?save_path=' + encodeURIComponent(savePath));
+    const data = await res.json();
+    if (data.ok) {
+      const msg = lang === 'zh'
+        ? `备份已保存：${data.filename}`
+        : `Backup saved: ${data.filename}`;
+      alert(msg);
+    } else {
+      alert(lang === 'zh' ? '导出失败，请重试' : 'Export failed, please try again');
+    }
+  } catch(e) {
+    alert(lang === 'zh' ? '导出失败：' + e.message : 'Export failed: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (span) span.textContent = t('exportBackup');
+  }
+}
+
+// ── 导入备份 ──────────────────────────────────────────
+async function importBackup(btn) {
+  // 让用户选择 zip 文件
+  let zipPath = null;
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_zip) {
+    try { zipPath = await window.pywebview.api.pick_zip(); } catch(e) {}
+  }
+  if (!zipPath) return;
+
+  const confirmMsg = lang === 'zh'
+    ? '导入备份会覆盖当前知识库数据，确定继续吗？（当前数据库会保留一份 .bak 备份）'
+    : 'Importing will overwrite your current knowledge base. Continue? (A .bak copy will be kept)';
+  if (!confirm(confirmMsg)) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = lang === 'zh' ? '导入中...' : 'Importing...'; }
+  try {
+    const fd = new FormData();
+    fd.append('zip_path', zipPath);
+    const res = await fetch('/api/import-backup', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      alert(lang === 'zh'
+        ? '备份已恢复！请重启 Rivus 以加载最新数据。'
+        : 'Backup restored! Please restart Rivus to load the latest data.');
+    } else {
+      alert((lang === 'zh' ? '导入失败：' : 'Import failed: ') + (data.detail || data.message || '未知错误'));
+    }
+  } catch(e) {
+    alert(lang === 'zh' ? '导入失败：' + e.message : 'Import failed: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    const s = btn ? btn.querySelector('span') : null;
+    if (s) s.textContent = t('importBackup');
+  }
+}
+
+// ── Word (.docx) 导入 ─────────────────────────────────
+let nativeDocxPath = null;
+
+async function pickDocx() {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_docx) {
+    try {
+      const path = await window.pywebview.api.pick_docx();
+      if (path) {
+        nativeDocxPath = path;
+        document.getElementById('docx-label').textContent = `📝 ${path.split('/').pop()}`;
+      }
+      return;
+    } catch(e) { /* 退回浏览器方式 */ }
+  }
+  document.getElementById('docx-file').click();
+}
+
+function handleDocxDrop(e) {
+  e.preventDefault();
+  document.getElementById('docx-drop').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.docx')) {
+    nativeDocxPath = null;
+    const dt = new DataTransfer(); dt.items.add(file);
+    document.getElementById('docx-file').files = dt.files;
+    updateDocxLabel();
+  }
+}
+
+function updateDocxLabel() {
+  nativeDocxPath = null;
+  const f = document.getElementById('docx-file').files[0];
+  document.getElementById('docx-label').textContent = f ? `📝 ${f.name}` : t('dropDocx');
+}
+
+// ── Docs + Folders ────────────────────────────────────
+const icons = { 'PDF': '📄', 'manual': '📝', '手动输入': '📝' };
+let openFolders = new Set();
+
+function docItemHTML(d, inFolder = false) {
+  const icon = icons[d.source] || '🔗';
+  const title = d.title || d.url || '未命名';
+  const escaped = title.replace(/"/g, '&quot;');
+  const escapedUrl = (d.url || '').replace(/'/g, "\\'");
+
+  let titleEl;
+  if (d.source === 'PDF' && d.url) {
+    // PDF：调用系统默认阅读器打开
+    titleEl = `<span class="doc-title doc-link" title="${escaped}" style="cursor:pointer"
+      onclick="openLocalFile('${escapedUrl}', event)">${title}</span>`;
+  } else if (d.url) {
+    titleEl = `<span class="doc-title doc-link" title="${escaped}" style="cursor:pointer"
+      onclick="openUrl('${d.url.replace(/'/g,"\\'")}', event)">${title}</span>`;
+  } else {
+    titleEl = `<span class="doc-title" title="${escaped}">${title}</span>`;
+  }
+
+  const escapedTitle = title.replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+  return `<div class="doc-item" draggable="true" data-id="${d.id}" data-folder="${d.folder_id||''}"
+      ondragstart="dragStart(event,${d.id})" ondragend="dragEnd(event)"
+      oncontextmenu="showCtxMenu(event,${d.id},\`${escapedTitle}\`)" data-title="${escaped}">
+    <span class="doc-icon">${icon}</span>
+    ${titleEl}
+    <span class="doc-source">${d.source}</span>
+    <span class="doc-code" title="添加时间">${fmtCode(d.created_at)}</span>
+  </div>`;
+}
+
+function openLocalFile(path, e) {
+  e.stopPropagation();
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.open_file(path);
+  }
+}
+
+function openUrl(url, e) {
+  e.stopPropagation();
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.open_url(url);
+  }
+}
+
+async function loadDocs() {
+  const [docsRes, foldersRes] = await Promise.all([fetch('/api/docs'), fetch('/api/folders')]);
+  const docs = await docsRes.json();
+  const folders = await foldersRes.json();
+  const el = document.getElementById('doc-list');
+
+  if (!docs.length && !folders.length) {
+    el.innerHTML = `<div class="empty-docs">${t('emptyDocs')}</div>`;
+    return;
+  }
+
+  const byFolder = {};
+  const uncategorized = [];
+  docs.forEach(d => {
+    if (d.folder_id) { (byFolder[d.folder_id] = byFolder[d.folder_id]||[]).push(d); }
+    else uncategorized.push(d);
+  });
+
+  let html = '';
+
+  // 渲染文件夹
+  folders.forEach(f => {
+    const children = byFolder[f.id] || [];
+    const isOpen = openFolders.has(f.id);
+    html += `<div class="folder-section">
+      <div class="folder-header ${isOpen?'':'collapsed'}" data-fid="${f.id}"
+          ondragover="folderDragOver(event,${f.id})"
+          ondragleave="folderDragLeave(event)"
+          ondrop="folderDrop(event,${f.id})"
+          onclick="toggleFolder(${f.id})">
+        <span class="folder-arrow ${isOpen?'open':''}">▶</span>
+        <span class="folder-icon">📁</span>
+        <span class="folder-name" id="fname-${f.id}">${f.name}</span>
+        <span class="folder-count">${children.length}</span>
+        <span class="folder-actions" onclick="e=>e.stopPropagation()">
+          <button class="folder-action-btn" onclick="startRename(event,${f.id})" title="重命名">✏️</button>
+          <button class="folder-action-btn danger" onclick="deleteFolder(event,${f.id})" title="删除文件夹">🗑</button>
+        </span>
+      </div>
+      <div class="folder-children ${isOpen?'open':''}" id="fchildren-${f.id}">
+        ${children.map(d => docItemHTML(d, true)).join('')}
+        ${children.length===0?`<div class="empty-docs" style="font-size:11px;padding:8px 10px">${t('emptyFolder')}</div>`:''}
+      </div>
+    </div>`;
+  });
+
+  // 未分类
+  if (uncategorized.length || folders.length) {
+    if (folders.length) html += `<div class="uncategorized-label">${t('uncategorized')}</div>`;
+    html += uncategorized.map(d => docItemHTML(d)).join('');
+  }
+
+  if (!html) html = '<div class="empty-docs">还没有收藏</div>';
+  el.innerHTML = html;
+}
+
+function toggleFolder(fid) {
+  if (openFolders.has(fid)) openFolders.delete(fid);
+  else openFolders.add(fid);
+  loadDocs();
+}
+
+async function deleteDoc(id, e) {
+  e.stopPropagation();
+  await fetch(`/api/docs/${id}`, { method: 'DELETE' });
+  await loadDocs();
+}
+
+// ── Folder CRUD ───────────────────────────────────────
+async function createFolder() {
+  const name = prompt(t('folderNamePrompt'));
+  if (!name || !name.trim()) return;
+  const fd = new FormData(); fd.append('name', name.trim());
+  await fetch('/api/folders', { method: 'POST', body: fd });
+  await loadDocs();
+}
+
+async function deleteFolder(e, fid) {
+  e.stopPropagation();
+  if (!confirm(t('deleteFolderConfirm'))) return;
+  await fetch(`/api/folders/${fid}`, { method: 'DELETE' });
+  openFolders.delete(fid);
+  await loadDocs();
+}
+
+function startRename(e, fid) {
+  e.stopPropagation();
+  const nameEl = document.getElementById(`fname-${fid}`);
+  const cur = nameEl.textContent;
+  nameEl.innerHTML = `<input class="folder-rename-input" id="rinput-${fid}" value="${cur}" />`;
+  const input = document.getElementById(`rinput-${fid}`);
+  input.focus(); input.select();
+  const done = async () => {
+    const val = input.value.trim();
+    if (val && val !== cur) {
+      const fd = new FormData(); fd.append('name', val);
+      await fetch(`/api/folders/${fid}`, { method: 'PATCH', body: fd });
+    }
+    await loadDocs();
+  };
+  input.onblur = done;
+  input.onkeydown = (ev) => { if(ev.key==='Enter') done(); if(ev.key==='Escape') loadDocs(); ev.stopPropagation(); };
+}
+
+// ── Drag & Drop ───────────────────────────────────────
+let dragDocId = null;
+
+function dragStart(e, id) {
+  dragDocId = id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+}
+function folderDragOver(e, fid) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function folderDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+async function folderDrop(e, fid) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (dragDocId === null) return;
+  const fd = new FormData(); fd.append('folder_id', fid);
+  await fetch(`/api/docs/${dragDocId}/folder`, { method: 'PATCH', body: fd });
+  dragDocId = null;
+  openFolders.add(fid);
+  await loadDocs();
+}
+
+// ── Models ────────────────────────────────────────────
+async function loadModels() {
+  try {
+    const res = await fetch('/api/models');
+    const data = await res.json();
+    const sel = document.getElementById('model-select');
+    sel.innerHTML = data.models.map(m => {
+      const id = typeof m === 'string' ? m : m.id;
+      const label = typeof m === 'string' ? m : (m.label || m.id);
+      const selected = id === data.default ? 'selected' : '';
+      return `<option value="${id}" ${selected}>${label}</option>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('model-select').innerHTML = '<option value="qwen3.5:9b">qwen3.5:9b</option>';
+  }
+}
+
+// ── Chat ──────────────────────────────────────────────
+function clearChat() {
+  const ca = document.getElementById('chat-area');
+  ca.innerHTML = `<div class="welcome" id="welcome">
+    <div class="big-logo"><img src="/ui/icon.png" alt="Rivus"></div>
+    <h2>${t('appName')}</h2>
+    <p>${t('welcome')}</p>
+  </div>`;
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!document.getElementById('send-btn').disabled) sendQuery();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function addMessage(role, text) {
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
+
+  const ca = document.getElementById('chat-area');
+  const row = document.createElement('div');
+  row.className = `message-row ${role}`;
+  const initial = role === 'user' ? 'U' : 'M';
+  const avClass = role === 'user' ? 'user-av' : 'ai-av';
+  row.innerHTML = `
+    <div class="avatar ${avClass}">${initial}</div>
+    <div class="bubble">${text}</div>`;
+  ca.appendChild(row);
+  ca.scrollTop = ca.scrollHeight;
+  return row.querySelector('.bubble');
+}
+
+function _setStreamingUI(streaming) {
+  isStreaming = streaming;
+  document.getElementById('send-btn').style.display = streaming ? 'none' : '';
+  document.getElementById('stop-btn').style.display = streaming ? '' : 'none';
+  if (!streaming) {
+    const v = document.getElementById('q-input').value.trim();
+    document.getElementById('send-btn').disabled = !v;
+  }
+}
+
+function stopQuery() {
+  if (_queryEs) { _queryEs.close(); _queryEs = null; }
+  if (_activeCursor) { _activeCursor.remove(); _activeCursor = null; }
+  _setStreamingUI(false);
+}
+
+async function sendQuery() {
+  const input = document.getElementById('q-input');
+  const q = input.value.trim();
+  if (!q || isStreaming) return;
+
+  const model = document.getElementById('model-select').value;
+  _setStreamingUI(true);
+
+  // 引用模式：在用户消息里显示引用标签
+  const userLabel = pinnedDoc
+    ? `<span style="display:block;font-size:11px;opacity:.6;margin-bottom:4px">📎 ${pinnedDoc.title}</span>${q}`
+    : q;
+  addMessage('user', userLabel);
+  input.value = '';
+  input.style.height = 'auto';
+
+  // 构建请求 URL（引用时带 doc_id）
+  let queryUrl = `/api/query?q=${encodeURIComponent(q)}&model=${encodeURIComponent(model)}`;
+  if (pinnedDoc) queryUrl += `&doc_id=${pinnedDoc.id}`;
+
+  // 发送后清除引用
+  clearRef();
+
+  const aiBubble = addMessage('ai', '');
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  aiBubble.appendChild(cursor);
+  _activeCursor = cursor;
+
+  let text = '';
+  try {
+    _queryEs = new EventSource(queryUrl);
+
+    _queryEs.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'token') {
+        text += data.content;
+        aiBubble.textContent = text;
+        aiBubble.appendChild(cursor);
+        document.getElementById('chat-area').scrollTop = 999999;
+      } else if (data.type === 'sources') {
+        cursor.remove();
+        _activeCursor = null;
+        const sourcesDiv = document.createElement('div');
+        sourcesDiv.className = 'sources';
+        sourcesDiv.innerHTML = data.sources.map(s => {
+          const href = s.url ? `href="${s.url}" target="_blank"` : '';
+          return `<a class="source-chip" ${href}><span>📎 ${s.title}</span></a>`;
+        }).join('');
+        aiBubble.appendChild(sourcesDiv);
+      } else if (data.type === 'done' || data.type === 'error') {
+        cursor.remove();
+        _activeCursor = null;
+        if (data.type === 'error') {
+          aiBubble.textContent = '❌ ' + data.content;
+        }
+        _queryEs.close();
+        _queryEs = null;
+        _setStreamingUI(false);
+      }
+    };
+    _queryEs.onerror = () => {
+      cursor.remove();
+      _activeCursor = null;
+      _queryEs.close();
+      _queryEs = null;
+      _setStreamingUI(false);
+    };
+  } catch(e) {
+    cursor.remove();
+    _activeCursor = null;
+    aiBubble.textContent = '❌ ' + e.message;
+    _setStreamingUI(false);
+  }
+}
+
+// ── Modal ─────────────────────────────────────────────
+async function openModal() {
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('modal-status').textContent = '';
+  // 清空所有输入框，避免上次内容残留
+  document.getElementById('url-input').value = '';
+  document.getElementById('url-title').value = '';
+  document.getElementById('text-title').value = '';
+  document.getElementById('text-body').value = '';
+  document.getElementById('pdf-title').value = '';
+  document.getElementById('submit-btn').disabled = false;
+  // 填充文件夹列表
+  const res = await fetch('/api/folders');
+  const folders = await res.json();
+  const sel = document.getElementById('folder-select');
+  sel.innerHTML = `<option value="">${t('noFolder')}</option>` +
+    folders.map(f => `<option value="${f.id}">📁 ${f.name}</option>`).join('');
+  setTimeout(() => document.getElementById('url-input').focus(), 50);
+}
+function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+function closeModalIfBg(e) { if (e.target === document.getElementById('overlay')) closeModal(); }
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById('modal-status').textContent = '';
+}
+
+let nativePdfPath = null;  // pywebview 原生选择的路径
+
+async function pickPDF() {
+  // 优先用 pywebview 原生文件对话框
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_pdf) {
+    try {
+      const path = await window.pywebview.api.pick_pdf();
+      if (path) {
+        nativePdfPath = path;
+        const name = path.split('/').pop();
+        document.getElementById('drop-label').textContent = `📄 ${name}`;
+      }
+      return;
+    } catch(e) { /* 退回浏览器方式 */ }
+  }
+  // 浏览器 <input> 备用
+  document.getElementById('pdf-file').click();
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-drop').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    nativePdfPath = null;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('pdf-file').files = dt.files;
+    updateDropLabel();
+  }
+}
+function updateDropLabel() {
+  nativePdfPath = null;
+  const f = document.getElementById('pdf-file').files[0];
+  document.getElementById('drop-label').textContent = f ? `📄 ${f.name}` : t('dropPDF');
+}
+
+function setModalStatus(msg, type='') {
+  const el = document.getElementById('modal-status');
+  el.textContent = msg;
+  el.className = 'modal-status ' + type;
+}
+
+async function submitAdd() {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  setModalStatus(t('processing'));
+
+  try {
+    let res;
+    const folderId = document.getElementById('folder-select').value;
+
+    if (currentTab === 'url') {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) { setModalStatus(t('urlRequired'), 'error'); btn.disabled = false; return; }
+      const fd = new FormData();
+      fd.append('url', url);
+      const customTitle = document.getElementById('url-title').value.trim();
+      if (customTitle) fd.append('custom_title', customTitle);
+      if (folderId) fd.append('folder_id', folderId);
+      res = await fetch('/api/ingest/url', { method: 'POST', body: fd });
+    } else if (currentTab === 'text') {
+      const title = document.getElementById('text-title').value.trim() || t('unnamed');
+      const text = document.getElementById('text-body').value.trim();
+      if (!text) { setModalStatus(t('textRequired'), 'error'); btn.disabled = false; return; }
+      const fd = new FormData();
+      fd.append('title', title); fd.append('text', text);
+      if (folderId) fd.append('folder_id', folderId);
+      res = await fetch('/api/ingest/text', { method: 'POST', body: fd });
+    } else if (currentTab === 'pdf') {
+      const pdfTitle = document.getElementById('pdf-title').value.trim();
+      const fd = new FormData();
+      if (pdfTitle) fd.append('custom_title', pdfTitle);
+      if (folderId) fd.append('folder_id', folderId);
+
+      if (nativePdfPath) {
+        fd.append('path', nativePdfPath);
+        res = await fetch('/api/ingest/pdf-path', { method: 'POST', body: fd });
+      } else {
+        const file = document.getElementById('pdf-file').files[0];
+        if (!file) { setModalStatus(t('pdfRequired'), 'error'); btn.disabled = false; return; }
+        fd.append('file', file);
+        res = await fetch('/api/ingest/pdf', { method: 'POST', body: fd });
+      }
+    } else {
+      // docx
+      const docxTitle = document.getElementById('docx-title').value.trim();
+      const fd = new FormData();
+      if (docxTitle) fd.append('custom_title', docxTitle);
+      if (folderId) fd.append('folder_id', folderId);
+
+      if (nativeDocxPath) {
+        fd.append('path', nativeDocxPath);
+        res = await fetch('/api/ingest/docx-path', { method: 'POST', body: fd });
+      } else {
+        const file = document.getElementById('docx-file').files[0];
+        if (!file) { setModalStatus(t('docxRequired'), 'error'); btn.disabled = false; return; }
+        fd.append('file', file);
+        res = await fetch('/api/ingest/docx', { method: 'POST', body: fd });
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json();
+      const detail = err.detail || '';
+      // 409: 重复链接
+      if (res.status === 409 && detail.startsWith('__duplicate__')) {
+        const parts = detail.split('__').filter(Boolean); // ['duplicate', id, title]
+        const dupTitle = parts.slice(2).join('__');
+        const msg = lang === 'zh'
+          ? `「${dupTitle}」已在库中，无需重复添加。`
+          : `"${dupTitle}" is already in your library.`;
+        setModalStatus('ℹ️ ' + msg, 'error');
+        btn.disabled = false;
+        return;
+      }
+      setModalStatus('❌ ' + friendlyError(detail), 'error');
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+    await loadDocs();
+    setTimeout(closeModal, 1200);
+  } catch(e) {
+    setModalStatus('❌ ' + friendlyError(e.message), 'error');
+  }
+  btn.disabled = false;
+}
+
+// ── i18n ─────────────────────────────────────────────
+const LANGS = {
+  zh: {
+    appName:        '问渠',
+    addBookmark:    '添加收藏',
+    newFolder:      '新建文件夹',
+    clearChat:      '清空对话',
+    welcome:        '把你的收藏变成可以对话的知识库。<br>先添加一些收藏，然后向我提问。',
+    tabText:        '📝 文本',
+    customTitleHint:'自定义标题（留空则自动提取）',
+    titlePlaceholder:'标题',
+    textPlaceholder:'粘贴文章或笔记内容...',
+    pdfTitleHint:   '自定义标题（留空则使用文件名）',
+    dropPDF:        '点击选择或拖入 PDF 文件',
+    noFolder:       '📂 不加入文件夹',
+    cancel:         '取消',
+    add:            '添加',
+    uncategorized:  '未分类',
+    inputPlaceholder:'问我任何关于你收藏内容的问题...',
+    processing:     '处理中...',
+    folderNamePrompt:'文件夹名称：',
+    deleteFolderConfirm:'删除文件夹？收藏会移到未分类。',
+    emptyDocs:      '还没有收藏',
+    emptyFolder:    '拖入收藏到此处',
+    urlRequired:    '请输入 URL',
+    textRequired:   '请输入内容',
+    pdfRequired:    '请选择 PDF 文件',
+    failed:         '失败',
+    unnamed:        '未命名',
+    chunks:         '块',
+    dropDocx:       '点击选择或拖入 Word 文件',
+    docxRequired:   '请选择 Word 文件',
+    searchDocs:     '搜索收藏...',
+    localNotice:    '🔒 数据存储在本机',
+    exportBackup:   '导出备份',
+    importBackup:   '导入备份',
+    updateAvail:    '有新版本可用：',
+    updateDownload: '立即下载',
+    embedLoading:   'AI 模型加载中，首次提问可能稍慢...',
+    errScanned:     'PDF 为扫描版，无法提取文字，请使用 OCR 工具转换后再试。',
+    errEmpty:       '内容为空，请检查文件或链接。',
+    errNetwork:     '网络连接失败，请检查网络后重试。',
+    errTimeout:     '请求超时，请稍后重试。',
+    errGeneric:     '操作失败，请重试。',
+    ctxQuote:       '引用',
+    ctxRename:      '改名',
+    ctxDelete:      '删除',
+    settingsTitle:  '⚙️ 设置',
+    settingsBtn:    '设置',
+    settingsTabCloud: '☁️ 云端模型',
+    settingsTabLocal: '🖥️ 本地模型',
+    settingsInstalledModels: '已安装模型',
+    settingsDownloadModels:  '下载新模型',
+    settingsSave:   '保存',
+    settingsLoading:'加载中...',
+    settingsConfigured:    '✅ 已配置',
+    settingsNotConfigured: '未配置',
+    settingsKeyEntered:    '✅ 已填写',
+    settingsReplaceKey:    '输入新 Key 以替换...',
+    settingsPasteKey:      '粘贴你的 API Key...',
+    settingsOllamaChecking:    '正在检测 Ollama 状态…',
+    settingsOllamaRunning:     '● Ollama 运行中',
+    settingsOllamaNotInstalled:'⚠ Ollama 未安装（或已被删除）',
+    settingsOllamaReinstall:   '重新下载并安装 Ollama',
+    settingsOllamaVisitSite:   '前往 ollama.com 下载',
+    settingsOllamaWindowsHint: '安装完成后点击「刷新状态」继续。',
+    settingsOllamaNotRunning:  '⚠ Ollama 已安装但未启动',
+    settingsOllamaNotRunningHint: '如果双击 Ollama 提示"无法打开"，点击「修复并打开」；否则直接在 Applications 打开 Ollama，然后点「刷新状态」。',
+    settingsOllamaFix:     '修复并打开',
+    settingsOllamaRefresh: '刷新状态',
+    settingsOllamaStatusError: '⚠ 无法检测 Ollama 状态',
+    settingsNoModels:      '暂无已安装的本地模型',
+    settingsNoModelsHint:  '👆 请在上方「下载新模型」中选择并下载一个模型后才能使用本地 AI。',
+    settingsDeleteModel:   '删除',
+    settingsMemInsufficient: '内存不足：',
+    settingsOllamaMoreModels: '其他模型可在 <a href="https://ollama.com/library" target="_blank" style="color:var(--accent)">Ollama 官网</a> 自行下载，安装后会自动出现在模型选择列表中。',
+    ollamaOptionsTitle:       '⚙️ 高级参数',
+    ollamaOptCtxLabel:        '上下文窗口 (num_ctx)',
+    ollamaOptCtxHint:         '越大越占显存',
+    ollamaOptTempLabel:       '随机性 (temperature)',
+    ollamaOptTempLow:         '保守',
+    ollamaOptTempHigh:        '创意',
+    ollamaOptRepeatLabel:     '重复惩罚 (repeat_penalty)',
+    ollamaOptRepeatLow:       '允许重复',
+    ollamaOptRepeatHigh:      '强力去重',
+    ollamaOptPredictLabel:    '最大输出 (num_predict)',
+    ollamaOptPredictUnlimited:'不限',
+    ollamaOptPredictUnlimitedShort: '不限',
+    ollamaOptsSaved:          '✅ 参数已保存',
+    settingsInstalling:    '下载中…',
+    settingsInstallFailed: '❌ 安装失败：',
+    settingsRetry:         '重试',
+    settingsInstallDone:   '✅ Ollama 安装完成！',
+    settingsInstallDoneHint: '请在 Applications 中打开 Ollama，完成菜单栏初始设置后，点击「刷新状态」继续。',
+    settingsFixing:        '修复中…',
+    settingsFixFailed:     '❌ 修复失败：',
+    settingsFixDoneHint:   '已修复并尝试打开 Ollama，请在菜单栏确认它已启动后点击「刷新状态」。',
+    settingsCheckingOllama:'正在检查 Ollama 状态…',
+    settingsOllamaNotInstalledErr: '❌ Ollama 未安装，请在上方重新下载安装',
+    settingsOllamaNotStartedErr:   '❌ Ollama 未启动，请先在菜单栏打开 Ollama，然后重试',
+    settingsConnecting:    '正在连接 Ollama...',
+    settingsDownloadFailed:'❌ 下载失败：',
+    settingsDownloadDone:  '✅ 下载完成！',
+    settingsDoneBtn:       '已完成',
+    settingsConnectFailed: '❌ 连接失败，请确认 Ollama 已启动',
+    pullDownloading:       '下载中...',
+    setupNetworkError:     '❌ 下载失败，请检查网络连接',
+    settingsDeletingModel: '删除中...',
+    settingsDeleteFailed:  '删除失败：',
+    settingsUnknownError:  '未知错误',
+  },
+  en: {
+    appName:        'Rivus',
+    addBookmark:    'Add Bookmark',
+    newFolder:      'New Folder',
+    clearChat:      'Clear Chat',
+    welcome:        'Turn your bookmarks into a conversational knowledge base.<br>Add some bookmarks, then ask me anything.',
+    tabText:        '📝 Text',
+    customTitleHint:'Custom title (leave blank to auto-extract)',
+    titlePlaceholder:'Title',
+    textPlaceholder:'Paste article or note content...',
+    pdfTitleHint:   'Custom title (leave blank to use filename)',
+    dropPDF:        'Click to select or drag a PDF here',
+    noFolder:       '📂 No folder',
+    cancel:         'Cancel',
+    add:            'Add',
+    uncategorized:  'Uncategorized',
+    inputPlaceholder:'Ask anything about your saved content...',
+    processing:     'Processing...',
+    folderNamePrompt:'Folder name:',
+    deleteFolderConfirm:'Delete folder? Bookmarks will move to Uncategorized.',
+    emptyDocs:      'No bookmarks yet',
+    emptyFolder:    'Drag bookmarks here',
+    urlRequired:    'Please enter a URL',
+    textRequired:   'Please enter content',
+    pdfRequired:    'Please select a PDF file',
+    failed:         'Failed',
+    unnamed:        'Untitled',
+    chunks:         'chunks',
+    dropDocx:       'Click to select or drag a Word file here',
+    docxRequired:   'Please select a Word file',
+    searchDocs:     'Search bookmarks...',
+    localNotice:    '🔒 All data stored locally',
+    exportBackup:   'Export Backup',
+    importBackup:   'Import Backup',
+    updateAvail:    'New version available:',
+    updateDownload: 'Download',
+    embedLoading:   'AI model loading, first query may be slow...',
+    errScanned:     'This PDF is scanned (image-only) and cannot be read. Please convert it with an OCR tool first.',
+    errEmpty:       'Content is empty. Please check the file or link.',
+    errNetwork:     'Network error. Please check your connection and try again.',
+    errTimeout:     'Request timed out. Please try again.',
+    errGeneric:     'Something went wrong. Please try again.',
+    ctxQuote:       'Quote',
+    ctxRename:      'Rename',
+    ctxDelete:      'Delete',
+    settingsTitle:  '⚙️ Settings',
+    settingsBtn:    'Settings',
+    settingsTabCloud: '☁️ Cloud Models',
+    settingsTabLocal: '🖥️ Local Models',
+    settingsInstalledModels: 'Installed Models',
+    settingsDownloadModels:  'Download Model',
+    settingsSave:   'Save',
+    settingsLoading:'Loading...',
+    settingsConfigured:    '✅ Configured',
+    settingsNotConfigured: 'Not configured',
+    settingsKeyEntered:    '✅ Entered',
+    settingsReplaceKey:    'Enter new key to replace...',
+    settingsPasteKey:      'Paste your API Key...',
+    settingsOllamaChecking:    'Checking Ollama status…',
+    settingsOllamaRunning:     '● Ollama running',
+    settingsOllamaNotInstalled:'⚠ Ollama not installed (or deleted)',
+    settingsOllamaReinstall:   'Download & Install Ollama',
+    settingsOllamaVisitSite:   'Go to ollama.com',
+    settingsOllamaWindowsHint: 'After installing, click Refresh Status to continue.',
+    settingsOllamaNotRunning:  '⚠ Ollama installed but not running',
+    settingsOllamaNotRunningHint: 'If Ollama shows "cannot be opened", click Fix & Open. Otherwise open Ollama from Applications, then click Refresh Status.',
+    settingsOllamaFix:     'Fix & Open',
+    settingsOllamaRefresh: 'Refresh Status',
+    settingsOllamaStatusError: '⚠ Cannot detect Ollama status',
+    settingsNoModels:      'No local models installed',
+    settingsNoModelsHint:  '👆 Please download a model above before using local AI.',
+    settingsDeleteModel:   'Delete',
+    settingsMemInsufficient: 'Insufficient RAM:',
+    settingsOllamaMoreModels: 'More models are available on the <a href="https://ollama.com/library" target="_blank" style="color:var(--accent)">Ollama library</a>. Any model you install will automatically appear in the model selector.',
+    ollamaOptionsTitle:       '⚙️ Advanced Parameters',
+    ollamaOptCtxLabel:        'Context Window (num_ctx)',
+    ollamaOptCtxHint:         'Larger = more VRAM',
+    ollamaOptTempLabel:       'Temperature',
+    ollamaOptTempLow:         'Conservative',
+    ollamaOptTempHigh:        'Creative',
+    ollamaOptRepeatLabel:     'Repeat Penalty',
+    ollamaOptRepeatLow:       'Allow repeats',
+    ollamaOptRepeatHigh:      'Penalize hard',
+    ollamaOptPredictLabel:    'Max Output (num_predict)',
+    ollamaOptPredictUnlimited:'Unlimited',
+    ollamaOptPredictUnlimitedShort: 'Unlimited',
+    ollamaOptsSaved:          '✅ Settings saved',
+    settingsInstalling:    'Downloading…',
+    settingsInstallFailed: '❌ Install failed: ',
+    settingsRetry:         'Retry',
+    settingsInstallDone:   '✅ Ollama installed!',
+    settingsInstallDoneHint: 'Open Ollama from Applications and complete the menu bar setup, then click Refresh Status to continue.',
+    settingsFixing:        'Fixing…',
+    settingsFixFailed:     '❌ Fix failed: ',
+    settingsFixDoneHint:   'Fixed and launched Ollama. Confirm it is running in the menu bar, then click Refresh Status.',
+    settingsCheckingOllama:'Checking Ollama status…',
+    settingsOllamaNotInstalledErr: '❌ Ollama not installed. Please reinstall above.',
+    settingsOllamaNotStartedErr:   '❌ Ollama not running. Open Ollama from the menu bar, then retry.',
+    settingsConnecting:    'Connecting to Ollama...',
+    settingsDownloadFailed:'❌ Download failed: ',
+    settingsDownloadDone:  '✅ Download complete!',
+    settingsDoneBtn:       'Done',
+    settingsConnectFailed: '❌ Connection failed. Make sure Ollama is running.',
+    pullDownloading:       'Downloading...',
+    setupNetworkError:     '❌ Download failed. Check your network connection.',
+    settingsDeletingModel: 'Deleting...',
+    settingsDeleteFailed:  'Delete failed: ',
+    settingsUnknownError:  'Unknown error',
+  }
+};
+
+let lang = localStorage.getItem('mv_lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+
+function t(key) { return LANGS[lang][key] || key; }
+
+function applyLang() {
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.getElementById('lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
+  // text nodes
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18n);
+  });
+  // placeholders
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  // chat input
+  const qi = document.getElementById('q-input');
+  if (qi) qi.placeholder = t('inputPlaceholder');
+  // 如果设置面板当前打开，重新渲染当前 tab
+  if (document.getElementById('settings-overlay').classList.contains('show')) {
+    const activeTab = document.getElementById('stab-cloud').classList.contains('active') ? 'cloud' : 'local';
+    if (activeTab === 'cloud') renderSettingsCloudTab();
+    else renderSettingsLocalTab();
+  }
+}
+
+function toggleLang() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('mv_lang', lang);
+  applyLang();
+  loadDocs(); // 重新渲染（"未分类"等动态文字）
+}
+
+// ── Sidebar resize ────────────────────────────────────
+(function() {
+  const handle = document.getElementById('resize-handle');
+  const sidebar = document.querySelector('.sidebar');
+  let startX, startW;
+
+  handle.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = e => {
+      const w = Math.min(480, Math.max(160, startW + e.clientX - startX));
+      sidebar.style.width = w + 'px';
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+init();
+
+// Cmd+Q → 通知 Python 真正退出
+document.addEventListener('keydown', e => {
+  if (e.metaKey && e.key === 'q') {
+    e.preventDefault();
+    if (window.pywebview && pywebview.api) pywebview.api.quit_app();
+  }
+});
+
+// ── 设置面板 ──────────────────────────────────────────
+let settingsSelectedModel = null;
+let _dlEs = null;          // 全局 EventSource，关设置后继续跑
+let _dlInProgress = false; // 是否正在下载
+
+function fmtBytes(bytes) {
+  if (!bytes) return '';
+  const gb = bytes / 1073741824;
+  return gb >= 0.1 ? gb.toFixed(2) + ' GB' : (bytes / 1048576).toFixed(0) + ' MB';
+}
+
+function pullProgressLabel(d) {
+  if (d.total_bytes && d.completed_bytes) {
+    return `${fmtBytes(d.completed_bytes)} / ${fmtBytes(d.total_bytes)}`;
+  }
+  return d.status || t('pullDownloading');
+}
+
+function openSettings() {
+  try {
+    document.getElementById('settings-overlay').classList.add('show');
+    switchSettingsTab('cloud');
+  } catch(e) {
+    alert('设置面板错误：' + e.message + '\n' + e.stack);
+  }
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('show');
+  if (_dlInProgress) document.getElementById('dl-banner').classList.add('show');
+}
+
+function hideDlBanner() {
+  document.getElementById('dl-banner').classList.remove('show');
+}
+
+function settingsOverlayClick(e) {
+  if (e.target === document.getElementById('settings-overlay')) closeSettings();
+}
+
+function switchSettingsTab(tab) {
+  ['cloud','local'].forEach(t => {
+    document.getElementById(`stab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`spane-${t}`).classList.toggle('active', t === tab);
+  });
+  document.getElementById('settings-cloud-footer').style.display = tab === 'cloud' ? '' : 'none';
+  document.getElementById('settings-local-footer').style.display = tab === 'local' ? '' : 'none';
+  if (tab === 'cloud') renderSettingsCloudTab();
+  if (tab === 'local') renderSettingsLocalTab();
+}
+
+// 云端 tab
+async function renderSettingsCloudTab() {
+  const list = document.getElementById('settings-cloud-list');
+  list.innerHTML = `<div style="color:var(--text-secondary);font-size:13px">${t('settingsLoading')}</div>`;
+  const res = await fetch('/api/cloud-config');
+  const cfg = await res.json();
+
+  list.innerHTML = Object.entries(CLOUD_PROVIDERS_UI).map(([pid, meta]) => {
+    const entry = cfg[pid] || {};
+    const masked = entry.api_key_masked || '';
+    const configured = entry.configured;
+    const statusText = configured ? t('settingsConfigured') : t('settingsNotConfigured');
+    const statusCls = configured ? 'status-configured' : 'status-empty';
+    const keyLabel = configured
+      ? (lang === 'zh' ? `API Key（当前：${masked}）` : `API Key (current: ${masked})`)
+      : 'API Key';
+    return `<div class="cloud-provider-block">
+      <div class="cloud-provider-header" onclick="toggleSettingsCloudBlock('settings-cbody-${pid}')">
+        <span style="font-size:18px">${meta.icon}</span>
+        <span class="cloud-provider-name">${meta.name}</span>
+        <span class="cloud-provider-status ${statusCls}" id="settings-cstatus-${pid}">${statusText}</span>
+      </div>
+      <div class="cloud-provider-body" id="settings-cbody-${pid}" style="display:none">
+        <div class="cloud-key-label">${keyLabel}</div>
+        <input type="password" id="settings-ckey-${pid}"
+               placeholder="${configured ? t('settingsReplaceKey') : t('settingsPasteKey')}"
+               oninput="onSettingsKeyInput('${pid}')" />
+        <div class="cloud-key-hint">${lang === 'zh' ? meta.hint : (meta.hintEn || meta.hint)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSettingsCloudBlock(bodyId) {
+  // 折叠其它，切换当前
+  document.querySelectorAll('.cloud-provider-body').forEach(el => {
+    if (el.id === bodyId) el.style.display = el.style.display === 'none' ? '' : 'none';
+    else el.style.display = 'none';
+  });
+}
+
+function onSettingsKeyInput(pid) {
+  const val = document.getElementById(`settings-ckey-${pid}`).value.trim();
+  const statusEl = document.getElementById(`settings-cstatus-${pid}`);
+  if (val) { statusEl.textContent = t('settingsKeyEntered'); statusEl.className = 'cloud-provider-status status-configured'; }
+  else { statusEl.textContent = t('settingsNotConfigured'); statusEl.className = 'cloud-provider-status status-empty'; }
+}
+
+async function saveSettingsCloud() {
+  const payload = {};
+  Object.keys(CLOUD_PROVIDERS_UI).forEach(pid => {
+    const key = document.getElementById(`settings-ckey-${pid}`)?.value.trim();
+    if (key) payload[pid] = { api_key: key, enabled: true };
+  });
+  if (Object.keys(payload).length === 0) { closeSettings(); return; }
+  await fetch('/api/cloud-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await loadModels();
+  closeSettings();
+}
+
+// 本地模型 tab
+async function renderSettingsLocalTab() {
+  settingsSelectedModel = null;
+
+  // ── 先拿 system-info，确保 IS_WINDOWS 正确（顺序不能颠倒）──────────────
+  try {
+    const sysRes0 = await fetch('/api/system-info');
+    const sysInfo0 = await sysRes0.json();
+    IS_WINDOWS = sysInfo0.platform === 'Windows';
+  } catch(e) {}
+
+  // ── Ollama 状态检测 ──────────────────────────────────
+  const ollamaStatusEl = document.getElementById('settings-ollama-status');
+  if (ollamaStatusEl) {
+    ollamaStatusEl.innerHTML = `<span style="color:var(--text-secondary);font-size:13px">${t('settingsOllamaChecking')}</span>`;
+  }
+  let ollamaRunning = false;
+  try {
+    const oRes = await fetch('/api/ollama-status');
+    const oData = await oRes.json();
+    ollamaRunning = oData.running;
+    if (ollamaStatusEl) {
+      if (ollamaRunning) {
+        ollamaStatusEl.innerHTML = `<span style="color:#27ae60;font-size:13px">${t('settingsOllamaRunning')}</span>`;
+      } else if (!oData.installed) {
+        if (IS_WINDOWS) {
+          ollamaStatusEl.innerHTML = `
+            <div style="color:#e74c3c;font-size:13px;margin-bottom:8px">${t('settingsOllamaNotInstalled')}</div>
+            <button onclick="window.pywebview?.api?.open_url('https://ollama.com')"
+              style="padding:5px 14px;font-size:13px;border-radius:6px;
+                     background:var(--accent);color:#fff;border:none;cursor:pointer;margin-right:8px">
+              ${t('settingsOllamaVisitSite')}
+            </button>
+            <button onclick="renderSettingsLocalTab()"
+              style="padding:5px 14px;font-size:13px;border-radius:6px;
+                     background:none;border:1px solid var(--border);color:var(--text);cursor:pointer">
+              ${t('settingsOllamaRefresh')}
+            </button>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:8px">
+              ${t('settingsOllamaWindowsHint')}
+            </div>`;
+        } else {
+          ollamaStatusEl.innerHTML = `
+            <div style="color:#e74c3c;font-size:13px;margin-bottom:8px">${t('settingsOllamaNotInstalled')}</div>
+            <button id="settings-ollama-install-btn" onclick="settingsInstallOllama()"
+              style="padding:5px 14px;font-size:13px;border-radius:6px;
+                     background:var(--accent);color:#fff;border:none;cursor:pointer">
+              ${t('settingsOllamaReinstall')}
+            </button>
+            <div id="settings-ollama-install-progress" style="display:none;margin-top:10px">
+              <div class="progress-bar-wrap"><div class="progress-bar" id="settings-ollama-install-bar" style="width:0%"></div></div>
+              <div class="progress-label" id="settings-ollama-install-label"></div>
+            </div>`;
+        }
+      } else {
+        ollamaStatusEl.innerHTML = `
+          <div style="color:#e67e22;font-size:13px;margin-bottom:8px">${t('settingsOllamaNotRunning')}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
+            ${t('settingsOllamaNotRunningHint')}
+          </div>
+          <button onclick="settingsFixAndOpenOllama(this)"
+            style="padding:4px 12px;font-size:12px;border-radius:5px;
+                   background:var(--accent);color:#fff;border:none;cursor:pointer;margin-right:8px">
+            ${t('settingsOllamaFix')}
+          </button>
+          <button onclick="renderSettingsLocalTab()"
+            style="padding:4px 12px;font-size:12px;border-radius:5px;
+                   background:none;border:1px solid var(--border);color:var(--text);cursor:pointer">
+            ${t('settingsOllamaRefresh')}
+          </button>`;
+      }
+    }
+  } catch(e) {
+    if (ollamaStatusEl) ollamaStatusEl.innerHTML = `<span style="color:#e74c3c;font-size:13px">${t('settingsOllamaStatusError')}</span>`;
+  }
+
+  // 已安装模型列表
+  const sysRes = await fetch('/api/system-info');
+  const sysInfo = await sysRes.json();
+  const installed = sysInfo.installed_models || [];
+  const installedEl = document.getElementById('settings-installed-models');
+  if (installed.length === 0) {
+    installedEl.innerHTML = `<div style="color:var(--text-secondary);font-size:13px">${t('settingsNoModels')}</div>
+      ${ollamaRunning ? `<div style="color:#e67e22;font-size:12px;margin-top:6px">${t('settingsNoModelsHint')}</div>` : ''}`;
+  } else {
+    installedEl.innerHTML = installed.map(m => `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px">${m}</span>
+        <button onclick="deleteLocalModel('${m.replace(/'/g,"\\'")}', this)"
+                style="background:none;border:1px solid #c0392b;color:#c0392b;
+                       border-radius:5px;padding:3px 10px;font-size:12px;cursor:pointer">
+          ${t('settingsDeleteModel')}
+        </button>
+      </div>`).join('');
+  }
+
+  // 可下载的模型卡片
+  const ram = sysInfo.ram_gb || 0;
+  const available   = MODEL_CATALOG.filter(m => ram === 0 || ram >= m.minRam);
+  const unavailable = MODEL_CATALOG.filter(m => ram > 0  && ram < m.minRam);
+  const container = document.getElementById('settings-model-cards');
+  const makeCard = (m, disabled) => {
+    const label  = lang === 'zh' ? m.tagLabel  : m.tagLabelEn;
+    const desc   = lang === 'zh' ? m.desc      : m.descEn;
+    const memReq = lang === 'zh' ? `需要至少 ${m.minRam} GB 内存` : `Requires at least ${m.minRam} GB RAM`;
+    const tagHtml  = `<span class="model-card-tag tag-${m.tag}">${label}</span>`;
+    const dimStyle = disabled ? 'opacity:.4;pointer-events:none;' : '';
+    return `<div class="model-card" style="${dimStyle}" id="smc-${m.id}" onclick="settingsSelectModel('${m.id}')">
+      <div class="model-card-radio"></div>
+      <div class="model-card-info">
+        <div class="model-card-name">${m.name}${tagHtml}</div>
+        <div class="model-card-desc">${desc}${disabled ? `<br><em>${memReq}</em>` : ''}</div>
+      </div>
+    </div>`;
+  };
+  container.innerHTML =
+    available.map(m => makeCard(m, false)).join('') +
+    (unavailable.length ? `<div style="font-size:12px;color:var(--text-secondary);margin:8px 0 4px">${t('settingsMemInsufficient')}</div>` : '') +
+    unavailable.map(m => makeCard(m, true)).join('') +
+    `<div style="font-size:12px;color:var(--text-secondary);margin-top:12px;line-height:1.6">${t('settingsOllamaMoreModels')}</div>`;
+  const dlBtn = document.getElementById('settings-dl-btn');
+  dlBtn.style.display = 'none';
+  dlBtn.disabled = false;
+  dlBtn.textContent = t('settingsDownloadModels');
+  document.getElementById('settings-dl-progress').style.display = 'none';
+
+  // 仅当 Ollama 已安装时显示参数区和保存按钮
+  const showOpts = ollamaRunning || installed.length > 0;
+  document.getElementById('ollama-options-section').style.display = showOpts ? '' : 'none';
+  document.getElementById('settings-local-footer').style.display = showOpts ? '' : 'none';
+  if (showOpts) loadOllamaOptions();
+}
+
+async function loadOllamaOptions() {
+  try {
+    const res = await fetch('/api/ollama-options');
+    const data = await res.json();
+    const opts = data.options;
+    const setSlider = (id, val) => {
+      const el = document.getElementById('opt-' + id);
+      const valEl = document.getElementById('opt-' + id + '-val');
+      if (!el) return;
+      el.value = val;
+      if (id === 'num_ctx') valEl.textContent = val;
+      else if (id === 'num_predict') valEl.textContent = val == -1 ? t('ollamaOptPredictUnlimited') : val;
+      else valEl.textContent = parseFloat(val).toFixed(2);
+    };
+    setSlider('num_ctx',        opts.num_ctx);
+    setSlider('temperature',    opts.temperature);
+    setSlider('top_p',          opts.top_p);
+    setSlider('repeat_penalty', opts.repeat_penalty);
+    setSlider('num_predict',    opts.num_predict);
+  } catch(e) { /* 静默失败，保持默认值 */ }
+}
+
+async function saveOllamaOptions() {
+  const get = id => parseFloat(document.getElementById('opt-' + id).value);
+  const payload = {
+    num_ctx:        parseInt(document.getElementById('opt-num_ctx').value),
+    temperature:    get('temperature'),
+    top_p:          get('top_p'),
+    repeat_penalty: get('repeat_penalty'),
+    num_predict:    parseInt(document.getElementById('opt-num_predict').value),
+  };
+  try {
+    await fetch('/api/ollama-options', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const btn = document.querySelector('#settings-local-footer .setup-btn');
+    const orig = btn.textContent;
+    btn.textContent = t('ollamaOptsSaved');
+    setTimeout(() => btn.textContent = orig, 1800);
+  } catch(e) { alert('保存失败: ' + e.message); }
+}
+
+function settingsSelectModel(id) {
+  settingsSelectedModel = id;
+  document.querySelectorAll('#settings-model-cards .model-card').forEach(el => {
+    el.classList.toggle('selected', el.id === `smc-${id}`);
+  });
+  document.getElementById('settings-dl-btn').style.display = '';
+}
+
+async function settingsInstallOllama() {
+  const btn = document.getElementById('settings-ollama-install-btn');
+  const progressWrap = document.getElementById('settings-ollama-install-progress');
+  const bar = document.getElementById('settings-ollama-install-bar');
+  const label = document.getElementById('settings-ollama-install-label');
+  if (btn) { btn.disabled = true; btn.textContent = t('settingsInstalling'); }
+  if (progressWrap) progressWrap.style.display = 'block';
+
+  const es = new EventSource('/api/ollama-install');
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (bar) bar.style.width = (d.pct || 0) + '%';
+    if (label) label.textContent = d.status || '';
+    if (d.done) {
+      es.close();
+      if (d.status === 'error') {
+        if (label) label.textContent = t('settingsInstallFailed') + (d.error || '');
+        if (btn) { btn.textContent = t('settingsRetry'); btn.disabled = false; }
+      } else {
+        if (bar) bar.style.width = '100%';
+        if (progressWrap) progressWrap.style.display = 'none';
+        const statusEl = document.getElementById('settings-ollama-status');
+        if (statusEl) statusEl.innerHTML = `
+          <div style="color:#27ae60;font-size:13px;margin-bottom:8px">${t('settingsInstallDone')}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
+            ${t('settingsInstallDoneHint')}
+          </div>
+          <button onclick="renderSettingsLocalTab()"
+            style="padding:4px 12px;font-size:12px;border-radius:5px;
+                   background:var(--accent);color:#fff;border:none;cursor:pointer">
+            ${t('settingsOllamaRefresh')}
+          </button>`;
+      }
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    if (label) label.textContent = t('settingsConnectFailed');
+    if (btn) { btn.textContent = t('settingsRetry'); btn.disabled = false; }
+  };
+}
+
+async function settingsFixAndOpenOllama(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = t('settingsFixing'); }
+  try {
+    const res = await fetch('/api/ollama-fix', { method: 'POST' });
+    const data = await res.json();
+    const statusEl = document.getElementById('settings-ollama-status');
+    if (!data.ok) {
+      if (statusEl) statusEl.innerHTML = `<div style="color:#e74c3c;font-size:13px">${t('settingsFixFailed')}${data.error}</div>`;
+      return;
+    }
+    if (statusEl) statusEl.innerHTML = `
+      <div style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">
+        ${t('settingsFixDoneHint')}
+      </div>
+      <button onclick="renderSettingsLocalTab()"
+        style="padding:4px 12px;font-size:12px;border-radius:5px;
+               background:var(--accent);color:#fff;border:none;cursor:pointer">
+        ${t('settingsOllamaRefresh')}
+      </button>`;
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = t('settingsOllamaFix'); }
+  }
+}
+
+async function settingsStartOllama() {
+  await fetch('/api/ollama-start', { method: 'POST' }).catch(() => {});
+}
+
+async function settingsDownload() {
+  if (!settingsSelectedModel) return;
+  if (_dlEs) { _dlEs.close(); _dlEs = null; }
+
+  const btn = document.getElementById('settings-dl-btn');
+  btn.disabled = true; btn.textContent = t('settingsDownloadModels');
+  const progressWrap  = document.getElementById('settings-dl-progress');
+  const progressBar   = document.getElementById('settings-dl-bar');
+  const progressLabel = document.getElementById('settings-dl-label');
+  progressWrap.style.display = 'block';
+  progressLabel.textContent = t('settingsCheckingOllama');
+
+  // 如果 Ollama 没在跑，先启动它
+  try {
+    const oRes = await fetch('/api/ollama-status');
+    const oData = await oRes.json();
+    if (!oData.running) {
+      if (!oData.installed) {
+        progressLabel.textContent = t('settingsOllamaNotInstalledErr');
+        btn.textContent = t('settingsRetry'); btn.disabled = false;
+        return;
+      }
+      progressLabel.textContent = t('settingsOllamaNotStartedErr');
+      btn.textContent = t('settingsRetry'); btn.disabled = false;
+      // 尝试触发打开
+      fetch('/api/ollama-start', { method: 'POST' }).catch(() => {});
+      return;
+    }
+  } catch(e) { /* 忽略检测错误，继续尝试下载 */ }
+
+  progressLabel.textContent = t('settingsConnecting');
+  _dlInProgress = true;
+
+  _dlEs = new EventSource(`/api/pull-model?model=${encodeURIComponent(settingsSelectedModel)}`);
+  _dlEs.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    const label = pullProgressLabel(d);
+    const pct = d.pct || 0;
+
+    // 同步更新设置面板（如果还开着）
+    if (progressBar) progressBar.style.width = pct + '%';
+    if (progressLabel) progressLabel.textContent = label;
+
+    // 同步更新主页横幅
+    document.getElementById('dl-banner-bar').style.width = pct + '%';
+    document.getElementById('dl-banner-label').textContent = label;
+
+    if (d.done) {
+      _dlEs.close(); _dlEs = null;
+      _dlInProgress = false;
+
+      if (d.status === 'error') {
+        const errMsg = t('settingsDownloadFailed') + (d.error || '');
+        if (progressLabel) progressLabel.textContent = errMsg;
+        document.getElementById('dl-banner-label').textContent = errMsg;
+        if (btn) { btn.textContent = t('settingsRetry'); btn.disabled = false; }
+      } else {
+        if (progressLabel) progressLabel.textContent = t('settingsDownloadDone');
+        if (progressBar) progressBar.style.width = '100%';
+        if (btn) { btn.textContent = t('settingsDoneBtn'); btn.disabled = false; }
+        document.getElementById('dl-banner-label').textContent = t('settingsDownloadDone');
+        setTimeout(() => document.getElementById('dl-banner').classList.remove('show'), 2000);
+        loadModels();
+        setTimeout(renderSettingsLocalTab, 600);
+      }
+    }
+  };
+  _dlEs.onerror = () => {
+    _dlEs.close(); _dlEs = null;
+    _dlInProgress = false;
+    const errMsg = t('settingsConnectFailed');
+    if (progressLabel) progressLabel.textContent = errMsg;
+    document.getElementById('dl-banner-label').textContent = errMsg;
+    if (btn) { btn.textContent = t('settingsRetry'); btn.disabled = false; }
+    setTimeout(() => document.getElementById('dl-banner').classList.remove('show'), 3000);
+  };
+}
+
+async function deleteLocalModel(modelName, btn) {
+  const confirmMsg = lang === 'zh'
+    ? `确认删除模型 "${modelName}"？\n删除后需重新下载才能使用。`
+    : `Delete model "${modelName}"?\nIt will need to be re-downloaded to use again.`;
+  if (!confirm(confirmMsg)) return;
+  btn.disabled = true;
+  btn.textContent = t('settingsDeletingModel');
+  try {
+    const res = await fetch(`/api/delete-model?model=${encodeURIComponent(modelName)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) {
+      btn.closest('div[style]').remove();
+      await loadModels();
+      const container = document.getElementById('settings-installed-models');
+      if (!container.querySelector('div')) container.textContent = t('settingsNoModels');
+    } else {
+      btn.textContent = t('settingsDeleteModel');
+      btn.disabled = false;
+      alert(t('settingsDeleteFailed') + (data.error || t('settingsUnknownError')));
+    }
+  } catch(e) {
+    btn.textContent = t('settingsDeleteModel');
+    btn.disabled = false;
+    alert(t('settingsDeleteFailed') + e.message);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# MemoryVault 依赖
+fastapi>=0.111.0
+uvicorn>=0.30.0
+python-multipart>=0.0.9
+sentence-transformers>=3.0.0
+sqlite-vec>=0.1.6
+requests>=2.31.0
+readability-lxml>=0.8.1
+lxml[html_clean]>=5.0.0
+pymupdf>=1.23.0
+pypdf>=4.0.0
+pywebview>=5.0.0
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+python-docx>=1.1.0

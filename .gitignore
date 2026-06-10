@@ -1,0 +1,60 @@
+# 旧版本和临时文件
+implementation/
+*.zip
+Hybrid_AI_Memory_Vault_Project_Plan.md
+MemoryVault_AI_Plan_v1.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Database (user data, don't commit)
+*.db
+*.db-shm
+*.db-wal
+
+# macOS OneDrive sync artifacts
+*.nosync
+dist.nosync/
+build.nosync/
+
+# App icons (binary, regenerate with make_icns.sh)
+*.icns
+*.ico
+
+# PyInstaller specs (optional: remove these lines if you want to commit them)
+# *.spec
+
+# User config (contains API keys)
+config.json
+
+# Uploaded PDFs / user documents
+pdfs/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
