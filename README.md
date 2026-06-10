@@ -30,9 +30,9 @@
 
 Most AI chat tools either send your data to the cloud, or stop at basic search. Rivus does neither.
 
-It's a **desktop app** that lets you build a personal knowledge base from your documents, web pages, PDFs, and notes — then ask questions about them using AI that runs **entirely on your own machine**. No subscriptions. No data leaving your computer. No vendor lock-in.
+It's a **desktop app** that lets you build a personal knowledge base from your documents, web pages, PDFs, and notes — then ask questions about them using AI that runs **entirely on your own machine**. No subscriptions. No vendor lock-in.
 
-If you prefer cloud models (DeepSeek, OpenAI, Claude), Rivus supports those too — your documents are still stored and indexed locally; only your query goes to the API.
+If you prefer cloud models (DeepSeek, OpenAI, Claude), Rivus supports those too. All documents and embeddings are stored locally on your machine. When using cloud models, your question and the relevant document excerpts retrieved by RAG are sent to the API — your full knowledge base stays on your device.
 
 ---
 
