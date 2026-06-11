@@ -4,7 +4,7 @@
 
 # Rivus · 问渠
 
-**Your personal knowledge base that thinks with you — fully offline, forever private.**
+**Your personal knowledge base powered by AI — run fully offline with local models, or connect to cloud APIs.**
 
 *问渠那得清如许，为有源头活水来*
 *"Why is the canal so clear? Because living water flows from the source."*
