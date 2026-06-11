@@ -106,6 +106,29 @@ Full English and Chinese interface — switches instantly without restart.
 
 **Windows note:** Windows Smart App Control may flag the installer. Click "More info → Run anyway".
 
+<details>
+<summary><b>Windows Setup Guide (click to expand)</b></summary>
+
+### Step 1 — Install Python 3.11
+
+Download from [python.org](https://www.python.org/downloads/).
+
+> ⚠️ On the installer's first screen, check **"Add Python to PATH"** before clicking Install. This is required for Rivus to work.
+
+### Step 2 — Update NVIDIA Drivers (for GPU acceleration)
+
+For best performance with local models, make sure your NVIDIA drivers are up to date. Download the latest drivers from [nvidia.com/drivers](https://www.nvidia.com/Download/index.aspx). Outdated drivers can cause local model errors.
+
+### Step 3 — Install Ollama (for local models)
+
+Due to Windows security restrictions, Ollama cannot be installed automatically. Download and install it manually from [ollama.com](https://ollama.com). After installation, launch Ollama and leave it running in the system tray before starting Rivus.
+
+### Step 4 — Run Rivus
+
+Double-click `Rivus.exe`. On first launch, Rivus will automatically install required dependencies (including PyTorch and related packages) and download the embedding model (~570MB). This requires an internet connection and may take **5–10 minutes** depending on your network speed. Subsequent launches will start immediately.
+
+</details>
+
 ---
 
 ### Option B: Run from Source
