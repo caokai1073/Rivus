@@ -1,8 +1,9 @@
 """
-server.py — FastAPI 后端
+server.py — FastAPI backend
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -10,6 +11,8 @@ import time
 import traceback
 import zipfile
 import tempfile
+from queue import Queue, Empty
+from typing import Iterator
 from pathlib import Path
 from typing import Optional
 
@@ -20,16 +23,18 @@ from fastapi.staticfiles import StaticFiles
 from db import (init_db, list_documents, delete_document, export_all, DB_PATH,
                 list_folders, create_folder, rename_folder, delete_folder, move_document,
                 get_document_by_id, search_documents, find_by_url, rename_document)
-from ingest import ingest_url, ingest_text, ingest_pdf, ingest_docx
+from ingest import ingest_url, ingest_text, ingest_pdf, ingest_docx, ingest_md, ingest_excel
 from query import answer_stream, list_ollama_models, DEFAULT_MODEL
 from config import (get_cloud_keys, set_cloud_keys, get_enabled_cloud_models,
                     CLOUD_PROVIDERS, APP_VERSION, UPDATE_CHECK_URL,
-                    get_ollama_options, set_ollama_options, OLLAMA_OPTIONS_DEFAULTS)
+                    get_ollama_options, set_ollama_options, OLLAMA_OPTIONS_DEFAULTS,
+                    get_remote_config, set_remote_config)
+import remote as _remote_mod
 
 app = FastAPI()
 init_db()
 
-# ── Embedding 模型预热（后台线程，避免首次问答卡顿）────────────────────────────
+# ── Embedding model warm-up (background thread to avoid first-query lag) ─────
 _embed_ready = [False]
 
 def _prewarm_embed():
@@ -37,9 +42,9 @@ def _prewarm_embed():
         from ingest import get_embed_model
         get_embed_model()
         _embed_ready[0] = True
-        print("[embed] ✓ 预热完成")
+        print("[embed] ✓ Warm-up complete")
     except Exception as e:
-        print(f"[embed] 预热失败: {e}")
+        print(f"[embed] Warm-up failed: {e}")
 
 threading.Thread(target=_prewarm_embed, daemon=True).start()
 
@@ -47,13 +52,13 @@ UI_DIR = Path(__file__).parent / "ui"
 UI_PATH = UI_DIR / "index.html"
 app.mount("/ui", StaticFiles(directory=UI_DIR), name="ui")
 
-# PDF 永久存储目录（和数据库同级）
+# Persistent PDF storage directory (same level as the database)
 PDF_DIR = DB_PATH.parent / "pdfs"
 PDF_DIR.mkdir(exist_ok=True)
 
 
 def _save_pdf_copy(src: str, original_name: str) -> str:
-    """把 PDF 保存到数据目录，返回永久路径"""
+    """Copy an uploaded file to the data directory, returns the permanent path"""
     safe_name = f"{int(time.time())}_{Path(original_name).name}"
     dest = PDF_DIR / safe_name
     shutil.copy2(src, dest)
@@ -62,7 +67,10 @@ def _save_pdf_copy(src: str, original_name: str) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return UI_PATH.read_text(encoding="utf-8")
+    return HTMLResponse(
+        content=UI_PATH.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @app.get("/api/docs")
@@ -76,7 +84,7 @@ def get_docs(q: Optional[str] = None):
 def get_doc(doc_id: int):
     doc = get_document_by_id(doc_id)
     if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+        raise HTTPException(status_code=404, detail="Document not found")
     return doc
 
 
@@ -86,9 +94,111 @@ def del_doc(doc_id: int):
     return {"ok": True}
 
 
+@app.delete("/api/docs")
+def del_docs_bulk(body: dict):
+    """Bulk delete documents by ID list. Body: {"ids": [1, 2, 3]}"""
+    ids = body.get("ids", [])
+    for doc_id in ids:
+        try:
+            delete_document(int(doc_id))
+        except Exception:
+            pass
+    return {"ok": True, "deleted": len(ids)}
+
+
+@app.get("/api/docs/{doc_id}/file")
+def get_doc_file(doc_id: int):
+    """Serve the original file for download. For User text entries, generates a .txt on the fly."""
+    from fastapi.responses import Response as FastAPIResponse
+    doc = get_document_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    url = doc.get("url", "")
+    if url and not url.startswith("http://") and not url.startswith("https://"):
+        if not os.path.isfile(url):
+            raise HTTPException(status_code=404, detail=f"File not found on disk: {url}")
+        filename = Path(url).name
+        return FileResponse(url, filename=filename)
+    # No local file (User text or URL source): serve full_text as .txt
+    full_text = doc.get("full_text") or ""
+    title = re.sub(r'[^\w\s\-]', '', doc.get("title", "document"))[:60].strip() or "document"
+    return FastAPIResponse(
+        content=full_text.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{title}.txt"'},
+    )
+
+
+@app.get("/api/docs/{doc_id}/open-path")
+def get_doc_open_path(doc_id: int):
+    """Return a local filesystem path suitable for open_file() in native mode.
+    For User text entries, writes content to a temp .txt file and returns that path."""
+    doc = get_document_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    url = doc.get("url", "")
+    if url and not url.startswith("http://") and not url.startswith("https://"):
+        if os.path.isfile(url):
+            return {"path": url}
+        raise HTTPException(status_code=404, detail=f"File not found on disk: {url}")
+    # Generate a temp .txt for User text
+    title = re.sub(r'[^\w\s\-]', '', doc.get("title", "document"))[:40].strip() or "document"
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".txt",
+        prefix=title + "_",
+        mode="w", encoding="utf-8",
+    )
+    tmp.write(doc.get("full_text") or "")
+    tmp.close()
+    return {"path": tmp.name}
+
+
+def _stream_ingest(fn, fn_kwargs: dict, cleanup_path: str = None) -> Iterator[str]:
+    """
+    Runs an ingest function in a background thread, collects progress via a Queue,
+    and yields SSE events.
+    Event format: data: {"type": "progress"|"done"|"error", ...}
+    """
+    q: Queue = Queue()
+
+    def progress_cb(done: int, total: int, phase: str):
+        q.put({"type": "progress", "done": done, "total": total, "phase": phase})
+
+    fn_kwargs["progress_cb"] = progress_cb
+
+    def run():
+        try:
+            result = fn(**fn_kwargs)
+            q.put({"type": "done", "result": result})
+        except Exception as e:
+            traceback.print_exc()
+            q.put({"type": "error", "message": str(e)})
+        finally:
+            if cleanup_path:
+                try:
+                    os.unlink(cleanup_path)
+                except OSError:
+                    pass
+
+    threading.Thread(target=run, daemon=True).start()
+
+    while True:
+        try:
+            event = q.get(timeout=300)
+        except Empty:
+            yield f'data: {json.dumps({"type": "error", "message": "Timeout"})}\n\n'
+            return
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        if event["type"] in ("done", "error"):
+            return
+
+
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
 @app.post("/api/ingest/url")
 def api_ingest_url(url: str = Form(...), custom_title: Optional[str] = Form(None), folder_id: Optional[int] = Form(None)):
-    # 去重：同一 URL 不重复入库
+    # Dedup: don't re-ingest a URL that's already in the database
     existing = find_by_url(url.strip())
     if existing:
         raise HTTPException(status_code=409, detail=f"__duplicate__{existing['id']}__{existing['title']}")
@@ -101,7 +211,7 @@ def api_ingest_url(url: str = Form(...), custom_title: Optional[str] = Form(None
 @app.patch("/api/docs/{doc_id}/title")
 def api_rename_doc(doc_id: int, title: str = Form(...)):
     if not title.strip():
-        raise HTTPException(status_code=400, detail="标题不能为空")
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
     rename_document(doc_id, title.strip())
     return {"ok": True}
 
@@ -116,41 +226,35 @@ def api_ingest_text(title: str = Form(...), text: str = Form(...), folder_id: Op
 
 @app.post("/api/ingest/pdf")
 def api_ingest_pdf(file: UploadFile = File(...), custom_title: Optional[str] = Form(None), folder_id: Optional[int] = Form(None)):
-    """浏览器文件上传：把 PDF 保存到数据目录再解析"""
-    import tempfile
+    """Browser file upload PDF; returns progress via SSE stream"""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    try:
-        shutil.copyfileobj(file.file, tmp)
-        tmp.close()
-        if os.path.getsize(tmp.name) == 0:
-            raise HTTPException(status_code=400, detail="上传的文件为空，请重新选择。")
-        # 永久保存副本
-        stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.pdf")
-        return ingest_pdf(tmp.name, custom_title=custom_title or None,
-                          folder_id=folder_id, stored_url=stored_path)
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except Exception:
-            pass
+    shutil.copyfileobj(file.file, tmp)
+    tmp.close()
+    if os.path.getsize(tmp.name) == 0:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty. Please select a valid file.")
+    stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.pdf")
+    return StreamingResponse(
+        _stream_ingest(ingest_pdf, dict(
+            file_path=tmp.name, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=stored_path,
+        ), cleanup_path=tmp.name),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
 
 
 @app.post("/api/ingest/pdf-path")
 def api_ingest_pdf_path(path: str = Form(...), custom_title: Optional[str] = Form(None), folder_id: Optional[int] = Form(None)):
-    """pywebview 原生选择：直接用本地路径，url 存原始路径"""
+    """pywebview native PDF picker; returns progress via SSE stream"""
     if not os.path.isfile(path):
-        raise HTTPException(status_code=400, detail=f"文件不存在: {path}")
-    try:
-        return ingest_pdf(path, custom_title=custom_title or None,
-                          folder_id=folder_id, stored_url=path)
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"File not found: {path}")
+    return StreamingResponse(
+        _stream_ingest(ingest_pdf, dict(
+            file_path=path, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=path,
+        )),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
 
 
 @app.get("/api/folders")
@@ -179,7 +283,7 @@ def api_move_doc(doc_id: int, folder_id: Optional[int] = Form(None)):
 
 @app.get("/api/ollama-status")
 def ollama_status():
-    """检测 Ollama 是否安装、是否运行"""
+    """Check whether Ollama is installed and running"""
     import shutil, requests as req
 
     running = False
@@ -189,7 +293,7 @@ def ollama_status():
     except Exception:
         pass
 
-    # 检测安装路径
+    # Check installation path
     installed = bool(shutil.which("ollama"))
     if not installed:
         candidates = [
@@ -200,7 +304,7 @@ def ollama_status():
         ]
         installed = any(os.path.exists(p) for p in candidates)
 
-    # 检测 Ollama.app
+    # Check for Ollama.app bundle
     app_path = None
     for p in [str(Path.home() / "Applications/Ollama.app"), "/Applications/Ollama.app"]:
         if os.path.exists(p):
@@ -212,7 +316,7 @@ def ollama_status():
 
 @app.post("/api/ollama-fix")
 def ollama_fix():
-    """修复 Ollama 并启动（macOS / Windows）"""
+    """Fix Ollama permissions and launch (macOS / Windows)"""
     import platform, stat as _stat
 
     if platform.system() == "Windows":
@@ -225,7 +329,7 @@ def ollama_fix():
                 subprocess.Popen([bin_path, "serve"],
                                  creationflags=subprocess.CREATE_NO_WINDOW)
                 return {"ok": True}
-            return {"ok": False, "error": "找不到 Ollama，请先安装"}
+            return {"ok": False, "error": "Ollama not found. Please install it first."}
         subprocess.Popen([str(ollama_exe)], creationflags=subprocess.CREATE_NO_WINDOW)
         return {"ok": True}
 
@@ -236,7 +340,7 @@ def ollama_fix():
             app_path = p
             break
     if not app_path:
-        return {"ok": False, "error": "找不到 Ollama.app"}
+        return {"ok": False, "error": "Ollama.app not found"}
 
     for root, dirs, files in os.walk(app_path):
         for name in files:
@@ -254,10 +358,10 @@ def ollama_fix():
 
 @app.post("/api/ollama-start")
 def ollama_start():
-    """触发 Ollama 启动（不阻塞等待，由前端轮询状态）"""
+    """Trigger Ollama launch (non-blocking; frontend polls status)"""
     import platform, shutil, subprocess, requests as req
 
-    # 已经在跑了
+    # Already running
     try:
         if req.get("http://localhost:11434/api/tags", timeout=2).ok:
             return {"ok": True, "already_running": True}
@@ -265,7 +369,7 @@ def ollama_start():
         pass
 
     if platform.system() == "Windows":
-        # 优先用 "Ollama app.exe"（带托盘），其次 ollama.exe serve
+        # Prefer "Ollama app.exe" (with tray icon), fall back to ollama.exe serve
         for exe_name in ["ollama app.exe", "ollama.exe"]:
             exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / exe_name
             if exe.exists():
@@ -277,46 +381,46 @@ def ollama_start():
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              creationflags=subprocess.CREATE_NO_WINDOW)
             return {"ok": True, "launched": True}
-        return {"ok": False, "error": "Ollama 未安装"}
+        return {"ok": False, "error": "Ollama is not installed"}
 
-    # macOS：找到 Ollama.app 就用 open 打开
+    # macOS: use `open` if Ollama.app is found
     for app_dir in [str(Path.home() / "Applications/Ollama.app"), "/Applications/Ollama.app"]:
         if os.path.exists(app_dir):
             subprocess.Popen(["open", app_dir])
             return {"ok": True, "launched": True}
 
-    # 没有 .app，尝试 ollama serve
+    # No .app found, try ollama serve
     ollama_bin = shutil.which("ollama")
     if ollama_bin:
         subprocess.Popen([ollama_bin, "serve"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "launched": True}
 
-    return {"ok": False, "error": "Ollama 未安装"}
+    return {"ok": False, "error": "Ollama is not installed"}
 
 
 @app.get("/api/ollama-install")
 def ollama_install():
-    """流式下载并安装 Ollama（支持 macOS 和 Windows）"""
+    """Stream Ollama download and installation (macOS and Windows)"""
     import platform, zipfile, tempfile, subprocess, requests as req, time
 
     def generate():
         try:
             system = platform.system()
             if system not in ("Darwin", "Windows"):
-                yield f'data: {json.dumps({"status":"error","error":"仅支持 macOS 和 Windows","done":True})}\n\n'
+                yield f'data: {json.dumps({"status":"error","error":"Only macOS and Windows are supported","done":True})}\n\n'
                 return
 
-            # ── Windows：直接跳官网，用户自行安装 ───────────────────────────────
+            # ── Windows: redirect to website, user installs manually ──────────
             if system == "Windows":
                 import webbrowser
                 webbrowser.open("https://ollama.com")
-                yield f'data: {json.dumps({"status":"error","error":"请在浏览器中下载并安装 Ollama，完成后重启 Rivus 即可使用本地模型","done":True})}\n\n'
+                yield f'data: {json.dumps({"status":"error","error":"Please download and install Ollama from the browser, then restart Rivus to use local models","done":True})}\n\n'
                 return
 
-            # ── macOS 安装路径 ────────────────────────────────────────────────
+            # ── macOS installation ────────────────────────────────────────────
             url = "https://ollama.com/download/Ollama-darwin.zip"
-            yield f'data: {json.dumps({"status":"正在下载 Ollama...","pct":0})}\n\n'
+            yield f'data: {json.dumps({"status":"Downloading Ollama...","pct":0})}\n\n'
 
             resp = req.get(url, stream=True, timeout=600,
                            headers={"User-Agent": "Mozilla/5.0"})
@@ -334,9 +438,9 @@ def ollama_install():
                             if total:
                                 pct = int(downloaded / total * 70)
                                 mb = downloaded // 1024 // 1024
-                                yield f'data: {json.dumps({"status":f"正在下载 Ollama... {mb} MB","pct":pct})}\n\n'
+                                yield f'data: {json.dumps({"status":f"Downloading Ollama... {mb} MB","pct":pct})}\n\n'
 
-                yield f'data: {json.dumps({"status":"正在解压...","pct":72})}\n\n'
+                yield f'data: {json.dumps({"status":"Extracting...","pct":72})}\n\n'
 
                 extract_dir = tempfile.mkdtemp()
                 with zipfile.ZipFile(tmp_path, "r") as zf:
@@ -347,7 +451,7 @@ def ollama_install():
                 except Exception:
                     pass
 
-            # 找 Ollama.app
+            # Find Ollama.app in extracted contents
             app_src = None
             for root, dirs, _ in os.walk(extract_dir):
                 for d in dirs:
@@ -358,11 +462,11 @@ def ollama_install():
                     break
 
             if not app_src:
-                raise FileNotFoundError("解压后未找到 Ollama.app")
+                raise FileNotFoundError("Ollama.app not found after extraction")
 
-            yield f'data: {json.dumps({"status":"正在安装...","pct":85})}\n\n'
+            yield f'data: {json.dumps({"status":"Installing...","pct":85})}\n\n'
 
-            # 安装到 ~/Applications（不需要管理员权限）
+            # Install to ~/Applications (no admin rights needed)
             apps_dir = Path.home() / "Applications"
             apps_dir.mkdir(exist_ok=True)
             dest = apps_dir / "Ollama.app"
@@ -371,7 +475,7 @@ def ollama_install():
             shutil.move(app_src, str(dest))
             shutil.rmtree(extract_dir, ignore_errors=True)
 
-            # 修复可执行权限（zipfile 解压不保留 +x）
+            # Fix executable permissions (zipfile extraction doesn't preserve +x)
             import stat as _stat
             for root, dirs, files in os.walk(str(dest)):
                 for name in files:
@@ -381,7 +485,7 @@ def ollama_install():
                         os.chmod(fp, cur | _stat.S_IXUSR | _stat.S_IXGRP | _stat.S_IXOTH)
                     except Exception:
                         pass
-            # 移除隔离属性（防止 Gatekeeper 拦截）
+            # Remove quarantine attribute (prevents Gatekeeper from blocking launch)
             subprocess.run(["xattr", "-rd", "com.apple.quarantine", str(dest)],
                            capture_output=True)
 
@@ -397,7 +501,7 @@ def ollama_install():
 
 @app.get("/api/system-info")
 def get_system_info():
-    """返回系统内存（GB）+ 已安装 LLM 模型列表（过滤 embedding 模型）"""
+    """Returns system RAM (GB) + list of installed LLM models (embedding models filtered out)"""
     import platform
     ram_gb = 0
     try:
@@ -432,7 +536,7 @@ def get_system_info():
         ram_gb = 0
 
     models = list_ollama_models()
-    # 过滤 embedding 模型（nomic 系列等非对话模型）
+    # Filter out embedding models (nomic series and other non-chat models)
     chat_models = [m for m in models if not any(
         m.lower().startswith(p) for p in ("nomic", "all-minilm", "mxbai", "bge", "snowflake")
     )]
@@ -446,7 +550,7 @@ def get_system_info():
 
 @app.get("/api/pull-model")
 def pull_model(model: str):
-    """流式拉取 Ollama 模型，返回进度 SSE"""
+    """Stream Ollama model pull progress as SSE"""
     import requests as req
 
     def generate():
@@ -487,7 +591,7 @@ def pull_model(model: str):
 
 @app.delete("/api/delete-model")
 def delete_model(model: str):
-    """删除本地 Ollama 模型"""
+    """Delete a local Ollama model"""
     import requests as req
     try:
         resp = req.delete(
@@ -503,7 +607,7 @@ def delete_model(model: str):
 
 @app.get("/api/cloud-config")
 def get_cloud_config():
-    """返回当前云端配置（隐藏 key 中间部分）"""
+    """Returns current cloud configuration (API keys partially masked)"""
     keys = get_cloud_keys()
     result = {}
     for provider, meta in CLOUD_PROVIDERS.items():
@@ -522,16 +626,16 @@ def get_cloud_config():
 @app.post("/api/cloud-config")
 def save_cloud_config(payload: dict):
     """
-    保存云端 API Keys。
+    Save cloud API keys.
     payload: { provider: { api_key?: str, enabled?: bool } }
-    api_key 为空字符串表示不更新（保留原值）。
+    An empty api_key string means "don't update" (keep existing value).
     """
     current = get_cloud_keys()
     for provider, data in payload.items():
         if provider not in CLOUD_PROVIDERS:
             continue
         entry = current.setdefault(provider, {})
-        if data.get("api_key"):          # 非空才覆盖
+        if data.get("api_key"):          # only overwrite if non-empty
             entry["api_key"] = data["api_key"]
         if "enabled" in data:
             entry["enabled"] = data["enabled"]
@@ -550,22 +654,72 @@ def save_ollama_options_api(payload: dict):
     return {"ok": True}
 
 
+# ── Remote Server ─────────────────────────────────────────────────────────────
+
+@app.get("/api/remote/config")
+def remote_config_get():
+    return get_remote_config()
+
+
+@app.get("/api/remote/status")
+def remote_status():
+    return _remote_mod.status()
+
+
+@app.post("/api/remote/connect")
+def remote_connect(payload: dict):
+    # Save config (password is not persisted)
+    cfg = {k: payload.get(k, v) for k, v in {
+        "host": "", "user": "", "ssh_port": 22, "auth_mode": "key",
+        "key_path": "~/.ssh/id_rsa", "remote_port": 11434, "local_port": 11435,
+    }.items()}
+    set_remote_config(cfg)
+    result = _remote_mod.connect(
+        host=cfg["host"],
+        user=cfg["user"],
+        ssh_port=int(cfg["ssh_port"]),
+        auth_mode=cfg["auth_mode"],
+        key_path=cfg.get("key_path", ""),
+        password=payload.get("password", ""),   # password is not persisted
+        remote_port=int(cfg["remote_port"]),
+        local_port=int(cfg["local_port"]),
+    )
+    return result
+
+
+@app.post("/api/remote/disconnect")
+def remote_disconnect():
+    _remote_mod.disconnect()
+    return {"ok": True}
+
+
 @app.get("/api/models")
 def get_models():
-    # 本地 Ollama 模型
-    local = list_ollama_models()
-    chat_local = [m for m in local if not any(
-        m.lower().startswith(p) for p in ("nomic", "all-minilm", "mxbai", "bge", "snowflake")
-    )]
-    # 云端模型（已配置 key）
+    _EMBED_PREFIXES = ("nomic", "all-minilm", "mxbai", "bge", "snowflake")
+
+    # Local Ollama models (always queries localhost)
+    local_raw = list_ollama_models()
+    chat_local = [m for m in local_raw if not any(m.lower().startswith(p) for p in _EMBED_PREFIXES)]
+
+    # Remote SSH tunnel models (if connected)
+    remote_raw = _remote_mod.list_remote_models()
+    chat_remote = [m for m in remote_raw if not any(m.lower().startswith(p) for p in _EMBED_PREFIXES)]
+
+    # Cloud models (with configured keys)
     cloud = get_enabled_cloud_models()
+
     all_models = (
-        [{"id": m, "label": m} for m in chat_local]
-        + [{"id": m["id"], "label": m["label"]} for m in cloud]
+        [{"id": m,              "label": m}              for m in chat_local]
+        + [{"id": f"remote:{m}", "label": f"🌐 ssh: {m}"} for m in chat_remote]
+        + [{"id": m["id"],       "label": m["label"]}     for m in cloud]
     )
+
+    # Default model: prefer local, then remote, then cloud
     default_id = (
-        chat_local[0] if chat_local
-        else (cloud[0]["id"] if cloud else DEFAULT_MODEL)
+        chat_local[0]          if chat_local  else
+        f"remote:{chat_remote[0]}" if chat_remote else
+        cloud[0]["id"]         if cloud       else
+        DEFAULT_MODEL
     )
     return {"models": all_models, "default": default_id}
 
@@ -581,14 +735,26 @@ def get_version():
     if UPDATE_CHECK_URL:
         try:
             import requests as req
-            r = req.get(UPDATE_CHECK_URL, timeout=4,
+            r = req.get(UPDATE_CHECK_URL, timeout=6,
                         headers={"User-Agent": "Rivus-App"})
             data = r.json()
             latest = data.get("tag_name", "").lstrip("v")
-            if latest and latest != APP_VERSION:
+
+            def _ver(v):
+                try:
+                    return tuple(int(x) for x in v.split("."))
+                except Exception:
+                    return (0,)
+
+            if latest and _ver(latest) > _ver(APP_VERSION):
                 result["latest"] = latest
                 result["update_available"] = True
-                result["url"] = data.get("html_url", "")
+                # Find the platform-specific installer asset
+                import platform as _platform
+                suffix = ".dmg" if _platform.system() == "Darwin" else ".exe"
+                assets = data.get("assets", [])
+                asset = next((a for a in assets if a["name"].endswith(suffix)), None)
+                result["url"] = asset["browser_download_url"] if asset else data.get("html_url", "")
         except Exception:
             pass
     return result
@@ -596,19 +762,19 @@ def get_version():
 
 @app.get("/api/export")
 def export_backup(save_path: Optional[str] = None):
-    """导出知识库：打包 zip 到用户指定路径"""
+    """Export knowledge base: pack into a zip at the user-specified path"""
     from datetime import datetime
     date_str = datetime.now().strftime("%Y-%m-%d")
     filename = f"rivus-backup-{date_str}.zip"
 
     if save_path:
         out_path = Path(save_path)
-        # 确保有 .zip 后缀
+        # Ensure .zip extension
         if out_path.suffix.lower() != ".zip":
             out_path = out_path.with_suffix(".zip")
         out_path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        # 未传路径时回退到 Downloads
+        # Fall back to Downloads if no path provided
         downloads = Path.home() / "Downloads"
         downloads.mkdir(exist_ok=True)
         out_path = downloads / filename
@@ -626,28 +792,28 @@ def export_backup(save_path: Optional[str] = None):
 
 @app.post("/api/import-backup")
 def import_backup(zip_path: str = Form(...)):
-    """从备份 zip 恢复知识库（替换现有数据库和 PDF）"""
+    """Restore knowledge base from a backup zip (replaces current database and PDFs)"""
     if not os.path.isfile(zip_path):
-        raise HTTPException(status_code=400, detail=f"文件不存在: {zip_path}")
+        raise HTTPException(status_code=400, detail=f"File not found: {zip_path}")
     if not zipfile.is_zipfile(zip_path):
-        raise HTTPException(status_code=400, detail="不是有效的 zip 文件")
+        raise HTTPException(status_code=400, detail="Not a valid zip file")
 
-    # 解压到临时目录验证内容
+    # Extract to temp dir for validation
     tmp_dir = tempfile.mkdtemp()
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
             names = zf.namelist()
             if "rivus.db" not in names:
-                raise HTTPException(status_code=400, detail="备份文件中未找到 rivus.db，请确认文件来源")
+                raise HTTPException(status_code=400, detail="rivus.db not found in backup. Please verify the file source.")
             zf.extractall(tmp_dir)
 
-        # 备份当前数据库
+        # Back up current database before replacing
         db_src = Path(tmp_dir) / "rivus.db"
         if DB_PATH.exists():
             shutil.copy2(DB_PATH, str(DB_PATH) + ".bak")
         shutil.copy2(db_src, DB_PATH)
 
-        # 恢复 PDF 文件
+        # Restore PDF files
         pdf_src_dir = Path(tmp_dir) / "pdfs"
         if pdf_src_dir.exists():
             PDF_DIR.mkdir(exist_ok=True)
@@ -658,48 +824,112 @@ def import_backup(zip_path: str = Form(...)):
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return {"ok": True, "message": "备份已恢复，请重启应用以加载最新数据。"}
+    return {"ok": True, "message": "Backup restored. Please restart the app to load the latest data."}
 
 
 @app.post("/api/ingest/docx")
 def api_ingest_docx(file: UploadFile = File(...),
                     custom_title: Optional[str] = Form(None),
                     folder_id: Optional[int] = Form(None)):
-    """浏览器上传 .docx 文件"""
+    """Browser file upload .docx; returns progress via SSE stream"""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
-    try:
-        shutil.copyfileobj(file.file, tmp)
-        tmp.close()
-        if os.path.getsize(tmp.name) == 0:
-            raise HTTPException(status_code=400, detail="上传的文件为空，请重新选择。")
-        stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.docx")
-        return ingest_docx(tmp.name, custom_title=custom_title or None,
-                           folder_id=folder_id, stored_url=stored_path)
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except Exception:
-            pass
+    shutil.copyfileobj(file.file, tmp)
+    tmp.close()
+    if os.path.getsize(tmp.name) == 0:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty. Please select a valid file.")
+    stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.docx")
+    return StreamingResponse(
+        _stream_ingest(ingest_docx, dict(
+            file_path=tmp.name, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=stored_path,
+        ), cleanup_path=tmp.name),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
 
 
 @app.post("/api/ingest/docx-path")
 def api_ingest_docx_path(path: str = Form(...),
                          custom_title: Optional[str] = Form(None),
                          folder_id: Optional[int] = Form(None)):
-    """pywebview 原生选择 .docx 文件"""
+    """pywebview native .docx picker; returns progress via SSE stream"""
     if not os.path.isfile(path):
-        raise HTTPException(status_code=400, detail=f"文件不存在: {path}")
-    try:
-        return ingest_docx(path, custom_title=custom_title or None,
-                           folder_id=folder_id, stored_url=path)
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"File not found: {path}")
+    return StreamingResponse(
+        _stream_ingest(ingest_docx, dict(
+            file_path=path, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=path,
+        )),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
+
+
+@app.post("/api/ingest/excel")
+def api_ingest_excel(file: UploadFile = File(...),
+                     custom_title: Optional[str] = Form(None),
+                     folder_id: Optional[int] = Form(None)):
+    """Browser file upload .xlsx; returns progress via SSE stream"""
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    shutil.copyfileobj(file.file, tmp)
+    tmp.close()
+    stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.xlsx")
+    return StreamingResponse(
+        _stream_ingest(ingest_excel, dict(
+            file_path=tmp.name, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=stored_path,
+        ), cleanup_path=tmp.name),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
+
+
+@app.post("/api/ingest/excel-path")
+def api_ingest_excel_path(path: str = Form(...),
+                          custom_title: Optional[str] = Form(None),
+                          folder_id: Optional[int] = Form(None)):
+    """pywebview native .xlsx picker; returns progress via SSE stream"""
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail=f"File not found: {path}")
+    return StreamingResponse(
+        _stream_ingest(ingest_excel, dict(
+            file_path=path, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=path,
+        )),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
+
+
+@app.post("/api/ingest/md")
+def api_ingest_md(file: UploadFile = File(...),
+                  custom_title: Optional[str] = Form(None),
+                  folder_id: Optional[int] = Form(None)):
+    """Browser file upload .md; returns progress via SSE stream"""
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".md")
+    shutil.copyfileobj(file.file, tmp)
+    tmp.close()
+    stored_path = _save_pdf_copy(tmp.name, file.filename or "upload.md")
+    return StreamingResponse(
+        _stream_ingest(ingest_md, dict(
+            file_path=tmp.name, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=stored_path,
+        ), cleanup_path=tmp.name),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
+
+
+@app.post("/api/ingest/md-path")
+def api_ingest_md_path(path: str = Form(...),
+                       custom_title: Optional[str] = Form(None),
+                       folder_id: Optional[int] = Form(None)):
+    """pywebview native .md picker; returns progress via SSE stream"""
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail=f"File not found: {path}")
+    return StreamingResponse(
+        _stream_ingest(ingest_md, dict(
+            file_path=path, custom_title=custom_title or None,
+            folder_id=folder_id, stored_url=path,
+        )),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
 
 
 @app.get("/api/query")
@@ -716,7 +946,7 @@ def api_query(q: str, model: str = DEFAULT_MODEL, doc_id: Optional[int] = None):
                     key = (s["title"], s["url"])
                     if key not in seen:
                         seen.add(key)
-                        src_list.append({"title": s["title"], "url": s["url"]})
+                        src_list.append({"doc_id": s.get("doc_id"), "title": s["title"], "url": s["url"]})
                 data = json.dumps({"type": "sources", "sources": src_list}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
             yield "data: {\"type\": \"done\"}\n\n"

@@ -1,5 +1,5 @@
 """
-ingest.py — 内容解析 + 切块 + Embedding + 入库
+ingest.py — Content parsing + chunking + embedding + database ingestion
 """
 import re
 from pathlib import Path
@@ -12,53 +12,53 @@ from sentence_transformers import SentenceTransformer
 import threading
 from db import init_db, insert_document, insert_chunk, update_summary
 
-# ── 全局单例 embedding 模型 ───────────────────────────────────────────────────
+# ── Global singleton embedding model ─────────────────────────────────────────
 _model: Optional[SentenceTransformer] = None
 
 def get_embed_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        print("[ingest] 加载 embedding 模型 BAAI/bge-m3 ...")
-        # 优先离线加载（模型已缓存时不联网）
+        print("[ingest] Loading embedding model BAAI/bge-m3 ...")
+        # Prefer offline loading (no network if model is already cached)
         try:
             _model = SentenceTransformer("BAAI/bge-m3", local_files_only=True)
         except Exception:
-            # 首次使用，需要下载
+            # First run: download the model
             _model = SentenceTransformer("BAAI/bge-m3")
     return _model
 
 
-# ── 文本切块（段落感知）────────────────────────────────────────────────────────
+# ── Text chunking (paragraph-aware) ──────────────────────────────────────────
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
 
 def chunk_text(text: str) -> list[str]:
     """
-    按段落切块：尽量在段落边界断开，保持语义完整。
-    每块不超过 CHUNK_SIZE 字符，相邻块重叠 CHUNK_OVERLAP 字符。
+    Paragraph-aware chunking: split at paragraph boundaries to preserve semantic coherence.
+    Each chunk is at most CHUNK_SIZE characters; adjacent chunks overlap by CHUNK_OVERLAP characters.
     """
-    # 清理过多空行
+    # Normalize excessive blank lines
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
 
-    # 先按段落（双换行）分割
+    # Split on paragraph boundaries (double newline)
     paragraphs = [p.strip() for p in re.split(r"\n\n+", text) if p.strip()]
 
     chunks = []
     current = ""
 
     for para in paragraphs:
-        # 单段超长则强制按字符切
+        # Force-split paragraphs that exceed CHUNK_SIZE
         if len(para) > CHUNK_SIZE:
             if current:
                 chunks.append(current.strip())
                 current = ""
-            # 按句子边界尝试切（。！？.!?）
+            # Try to split on sentence boundaries (。！？.!?)
             sentences = re.split(r"(?<=[。！？.!?])\s*", para)
             buf = ""
             for sent in sentences:
                 if len(buf) + len(sent) > CHUNK_SIZE and buf:
                     chunks.append(buf.strip())
-                    # 重叠：保留最后 CHUNK_OVERLAP 字符
+                    # Overlap: keep last CHUNK_OVERLAP characters
                     buf = buf[-CHUNK_OVERLAP:] + sent
                 else:
                     buf += sent
@@ -66,10 +66,10 @@ def chunk_text(text: str) -> list[str]:
                 chunks.append(buf.strip())
             continue
 
-        # 加段落后超长 → 先保存当前块，再开新块（带重叠）
+        # Adding paragraph would exceed limit → save current chunk, start new one (with overlap)
         if current and len(current) + len(para) + 2 > CHUNK_SIZE:
             chunks.append(current.strip())
-            # 重叠：从上一块末尾取部分内容
+            # Overlap: carry over trailing content from previous chunk
             overlap = current[-CHUNK_OVERLAP:].strip()
             current = overlap + "\n\n" + para if overlap else para
         else:
@@ -81,7 +81,7 @@ def chunk_text(text: str) -> list[str]:
     return [c for c in chunks if c]
 
 
-# ── URL 解析 ──────────────────────────────────────────────────────────────────
+# ── URL parsing ───────────────────────────────────────────────────────────────
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -104,38 +104,38 @@ def parse_url(url: str) -> tuple[str, str, str]:
     return title, plain, source
 
 
-# ── PDF 解析 ──────────────────────────────────────────────────────────────────
+# ── PDF parsing ───────────────────────────────────────────────────────────────
 
 def _clean_pdf_text(text: str) -> str:
-    """清理 PDF 提取的常见乱码/格式问题"""
-    # 合并被断行的单词（英文连字符换行）
+    """Clean common artifacts and formatting issues from extracted PDF text"""
+    # Merge hyphenated line breaks in English words
     text = re.sub(r"-\n([a-z])", r"\1", text)
-    # 单个换行变空格（段内换行），双换行保留（段落）
+    # Single newlines become spaces (intra-paragraph); double newlines preserved (paragraphs)
     text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
-    # 多余空格
+    # Collapse multiple spaces/tabs
     text = re.sub(r"[ \t]+", " ", text)
-    # 多余空行
+    # Collapse excessive blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
 def parse_pdf(file_path: str) -> tuple[str, str, str]:
     """
-    解析 PDF，优先用 pymupdf（质量更好），退回 pypdf。
-    返回 (title, text, source)
+    Parse a PDF; prefer pymupdf (better quality), fall back to pypdf.
+    Returns (title, text, source).
     """
-    # ── 方案一：pymupdf ───────────────────────────────────────────────────────
+    # ── Option 1: pymupdf ─────────────────────────────────────────────────────
     try:
         import fitz  # pymupdf
         doc = fitz.open(file_path)
 
-        # 从元数据取标题，否则用文件名
+        # Use metadata title if available, otherwise use filename
         meta_title = (doc.metadata or {}).get("title", "").strip()
         title = meta_title or Path(file_path).stem
 
         pages = []
         for page in doc:
-            # sort=True 按阅读顺序排列文字块，对多栏 PDF 效果好很多
+            # sort=True orders text blocks by reading order (better for multi-column PDFs)
             page_text = page.get_text("text", sort=True)
             if page_text.strip():
                 pages.append(page_text)
@@ -143,14 +143,14 @@ def parse_pdf(file_path: str) -> tuple[str, str, str]:
         full_text = _clean_pdf_text("\n\n".join(pages))
 
         if len(full_text) < 50:
-            raise ValueError("扫描版 PDF（图片），无法提取文字。请使用支持 OCR 的工具先转换。")
+            raise ValueError("Scanned PDF (image-only); cannot extract text. Please convert with an OCR tool first.")
 
         return title, full_text, "PDF"
 
     except ImportError:
-        pass  # pymupdf 未安装，退回 pypdf
+        pass  # pymupdf not installed, fall back to pypdf
 
-    # ── 方案二：pypdf（备用）─────────────────────────────────────────────────
+    # ── Option 2: pypdf (fallback) ────────────────────────────────────────────
     try:
         import pypdf
         reader = pypdf.PdfReader(file_path)
@@ -159,40 +159,125 @@ def parse_pdf(file_path: str) -> tuple[str, str, str]:
         pages = [page.extract_text() or "" for page in reader.pages]
         full_text = _clean_pdf_text("\n\n".join(pages))
         if not full_text:
-            raise ValueError("PDF 内容为空，可能是扫描版或加密文件。")
+            raise ValueError("PDF content is empty; it may be a scanned or encrypted file.")
         return title, full_text, "PDF"
     except ImportError:
-        raise ImportError("请安装 pymupdf: pip install pymupdf")
+        raise ImportError("Please install pymupdf: pip install pymupdf")
 
 
-# ── 主入口 ────────────────────────────────────────────────────────────────────
+# ── Markdown parsing ──────────────────────────────────────────────────────────
 
-def ingest_url(url: str, custom_title: str = None, folder_id: int = None) -> dict:
+def parse_md(file_path: str) -> tuple[str, str, str]:
+    """
+    Parse a Markdown file, returns (title, plain_text, source).
+    - Title: first H1 heading, or filename if none found
+    - Strips markdown syntax to produce plain text for embedding
+    """
+    text = Path(file_path).read_text(encoding="utf-8", errors="ignore")
+
+    # Extract title from first H1
+    title = ""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            title = stripped[2:].strip()
+            break
+    if not title:
+        title = Path(file_path).stem
+
+    # Strip markdown syntax
+    clean = text
+    # Fenced code blocks: remove fence, keep content
+    clean = re.sub(r"```[^\n]*\n([\s\S]*?)```", r"\1", clean)
+    # Inline code
+    clean = re.sub(r"`([^`\n]+)`", r"\1", clean)
+    # Headings
+    clean = re.sub(r"^#{1,6}\s+", "", clean, flags=re.MULTILINE)
+    # Bold / italic / bold-italic
+    clean = re.sub(r"\*{1,3}([^*\n]+)\*{1,3}", r"\1", clean)
+    clean = re.sub(r"_{1,3}([^_\n]+)_{1,3}", r"\1", clean)
+    # Links [text](url) → text
+    clean = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", clean)
+    # Images ![alt](url) → alt
+    clean = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", clean)
+    # Blockquote markers
+    clean = re.sub(r"^>\s*", "", clean, flags=re.MULTILINE)
+    # Horizontal rules
+    clean = re.sub(r"^[-*_]{3,}\s*$", "", clean, flags=re.MULTILINE)
+    # Unordered list markers
+    clean = re.sub(r"^[ \t]*[-*+]\s+", "", clean, flags=re.MULTILINE)
+    # Ordered list markers
+    clean = re.sub(r"^[ \t]*\d+\.\s+", "", clean, flags=re.MULTILINE)
+    # Collapse excessive blank lines
+    clean = re.sub(r"\n{3,}", "\n\n", clean)
+
+    return title, clean.strip(), "Markdown"
+
+
+# ── Excel parsing ─────────────────────────────────────────────────────────────
+
+def parse_excel(file_path: str) -> tuple[str, str, str]:
+    """
+    Parse an Excel (.xlsx/.xls) file, returns (title, plain_text, source).
+    Each sheet is converted to plain text (tab-separated); sheet name used as section header.
+    """
+    try:
+        import openpyxl
+    except ImportError:
+        raise ImportError("openpyxl is not installed. Run: pip install openpyxl")
+
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    title = Path(file_path).stem
+
+    parts = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            # Skip fully empty rows
+            cells = [str(c) if c is not None else "" for c in row]
+            if any(c.strip() for c in cells):
+                rows.append("\t".join(cells))
+        if rows:
+            parts.append(f"[Sheet: {sheet_name}]\n" + "\n".join(rows))
+
+    wb.close()
+
+    if not parts:
+        raise ValueError("Excel file is empty. Please check that the file is valid.")
+
+    full_text = "\n\n".join(parts)
+    return title, full_text, "Excel"
+
+
+# ── Main entry points ─────────────────────────────────────────────────────────
+
+def ingest_url(url: str, custom_title: str = None, folder_id: int = None, progress_cb=None) -> dict:
     init_db()
-    print(f"[ingest] 正在抓取: {url}")
+    print(f"[ingest] Fetching: {url}")
     title, text, source = parse_url(url)
     if custom_title:
         title = custom_title
-    return _ingest_text(url=url, title=title, text=text, source=source, folder_id=folder_id)
+    return _ingest_text(url=url, title=title, text=text, source=source, folder_id=folder_id, progress_cb=progress_cb)
 
 
-def ingest_text(title: str, text: str, source: str = "手动输入", folder_id: int = None) -> dict:
+def ingest_text(title: str, text: str, source: str = "User", folder_id: int = None, progress_cb=None) -> dict:
     init_db()
-    return _ingest_text(url="", title=title, text=text, source=source, folder_id=folder_id)
+    return _ingest_text(url="", title=title, text=text, source=source, folder_id=folder_id, progress_cb=progress_cb)
 
 
-def ingest_docx(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "") -> dict:
-    """解析 Word (.docx) 文档"""
+def ingest_docx(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "", progress_cb=None) -> dict:
+    """Parse a Word (.docx) document"""
     init_db()
     try:
         from docx import Document as DocxDocument
     except ImportError:
-        raise ImportError("python-docx 未安装，请运行: pip install python-docx")
+        raise ImportError("python-docx is not installed. Run: pip install python-docx")
 
     doc = DocxDocument(file_path)
     title = custom_title or Path(file_path).stem
 
-    # 提取段落 + 表格文本
+    # Extract paragraphs + table text
     parts = []
     for para in doc.paragraphs:
         t = para.text.strip()
@@ -206,39 +291,90 @@ def ingest_docx(file_path: str, custom_title: str = None, folder_id: int = None,
 
     full_text = "\n\n".join(parts)
     if not full_text.strip():
-        raise ValueError("Word 文档内容为空，请检查文件是否正常。")
+        raise ValueError("Word document is empty. Please check that the file is valid.")
 
-    return _ingest_text(url=stored_url or file_path, title=title, text=full_text, source="Word", folder_id=folder_id)
+    return _ingest_text(url=stored_url or file_path, title=title, text=full_text, source="Word", folder_id=folder_id, progress_cb=progress_cb)
 
 
-def ingest_pdf(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "") -> dict:
+def ingest_pdf(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "", progress_cb=None) -> dict:
     init_db()
     title, text, source = parse_pdf(file_path)
     if custom_title:
         title = custom_title
-    # stored_url 是永久路径（用于"用默认应用打开"），空字符串表示无法定位原文件
-    return _ingest_text(url=stored_url, title=title, text=text, source=source, folder_id=folder_id)
+    return _ingest_text(url=stored_url, title=title, text=text, source=source, folder_id=folder_id, progress_cb=progress_cb)
 
 
-def _ingest_text(url: str, title: str, text: str, source: str, folder_id: int = None) -> dict:
+def ingest_excel(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "", progress_cb=None) -> dict:
+    """Parse an Excel (.xlsx) file"""
+    init_db()
+    title, text, source = parse_excel(file_path)
+    if custom_title:
+        title = custom_title
+    elif stored_url:
+        # Use "{timestamp}.xlsx" — unique and includes extension so AI can identify file type
+        p = Path(stored_url)
+        title = p.stem.split('_')[0] + p.suffix
+    return _ingest_text(url=stored_url or file_path, title=title, text=text, source=source, folder_id=folder_id, progress_cb=progress_cb)
+
+
+def ingest_md(file_path: str, custom_title: str = None, folder_id: int = None, stored_url: str = "", progress_cb=None) -> dict:
+    """Parse a Markdown (.md) file"""
+    init_db()
+    title, text, source = parse_md(file_path)
+    if custom_title:
+        title = custom_title
+    elif stored_url and title == Path(file_path).stem:
+        # parse_md fell back to the tmp filename; use "{timestamp}.md" instead
+        p = Path(stored_url)
+        title = p.stem.split('_')[0] + p.suffix
     if not text.strip():
-        raise ValueError("提取到的正文为空，请检查链接或内容。")
+        raise ValueError("Markdown file is empty. Please check that the file is valid.")
+    return _ingest_text(url=stored_url or file_path, title=title, text=text, source=source, folder_id=folder_id, progress_cb=progress_cb)
+
+
+_enrich_semaphore = threading.Semaphore(1)  # allow only one summary generation task at a time
+
+def _ingest_text(url: str, title: str, text: str, source: str,
+                 folder_id: int = None, progress_cb=None) -> dict:
+    if not text.strip():
+        raise ValueError("Extracted content is empty. Please check the link or input.")
 
     chunks = chunk_text(text)
-    print(f"[ingest] 《{title}》切成 {len(chunks)} 块")
+    total = len(chunks)
+    print(f"[ingest] '{title}' split into {total} chunks")
+    if progress_cb:
+        progress_cb(0, total, "chunked")
 
+    # Batch encode to avoid OOM/CPU overload on large documents
     model = get_embed_model()
-    embeddings = model.encode(chunks, show_progress_bar=False, normalize_embeddings=True).tolist()
+    BATCH = 16
+    all_embeddings = []
+    done = 0
+    for i in range(0, total, BATCH):
+        batch = chunks[i:i + BATCH]
+        embs = model.encode(batch, show_progress_bar=False,
+                            normalize_embeddings=True, batch_size=BATCH)
+        all_embeddings.extend(embs.tolist())
+        done += len(batch)
+        if progress_cb:
+            progress_cb(done, total, "embedding")
+
+    if progress_cb:
+        progress_cb(total, total, "saving")
 
     doc_id = insert_document(url=url, title=title, source=source, full_text=text, folder_id=folder_id)
-    for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+    for i, (chunk, emb) in enumerate(zip(chunks, all_embeddings)):
         insert_chunk(doc_id=doc_id, chunk_index=i, text=chunk, embedding=emb)
 
-    print(f"[ingest] ✓ 已存入，doc_id={doc_id}")
+    print(f"[ingest] ✓ Saved, doc_id={doc_id}")
 
-    # 后台异步生成摘要（不阻塞用户操作）
+    # Generate summary in background (semaphore ensures only one runs at a time)
+    def _enrich_guarded(doc_id, title, text):
+        with _enrich_semaphore:
+            _enrich_background(doc_id, title, text)
+
     threading.Thread(
-        target=_enrich_background,
+        target=_enrich_guarded,
         args=(doc_id, title, text),
         daemon=True
     ).start()
@@ -247,18 +383,18 @@ def _ingest_text(url: str, title: str, text: str, source: str, folder_id: int = 
         "doc_id": doc_id,
         "title": title,
         "source": source,
-        "chunks": len(chunks),
+        "chunks": total,
         "chars": len(text),
     }
 
 
 def _enrich_background(doc_id: int, title: str, text: str):
-    """后台调用 Ollama 提炼文档摘要和关键信息"""
+    """Background task: call Ollama to generate a document summary and key info"""
     try:
         import requests as req
         from query import DEFAULT_MODEL
 
-        # 取前 4000 字（节省推理时间，基本够覆盖核心内容）
+        # Use first 4000 chars (covers core content while keeping inference fast)
         excerpt = text[:4000]
         prompt = f"""Analyze the following document and extract key information.
 
@@ -284,8 +420,8 @@ Output the following (reply in the same language as the document):
         if resp.ok:
             summary = resp.json()["message"]["content"].strip()
             update_summary(doc_id, summary)
-            print(f"[enrich] ✓ doc_id={doc_id} 摘要已生成")
+            print(f"[enrich] ✓ doc_id={doc_id} summary generated")
         else:
-            print(f"[enrich] Ollama 返回错误: {resp.status_code}")
+            print(f"[enrich] Ollama returned error: {resp.status_code}")
     except Exception as e:
-        print(f"[enrich] 摘要生成失败 doc_id={doc_id}: {e}")
+        print(f"[enrich] Summary generation failed doc_id={doc_id}: {e}")

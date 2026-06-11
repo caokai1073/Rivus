@@ -1,6 +1,6 @@
 """
-app.py — Rivus (问渠) 入口
-运行: python app.py
+app.py — Rivus (问渠) entry point
+Usage: python app.py
 """
 import os
 import sys
@@ -9,14 +9,14 @@ import socket
 import time
 import urllib.request
 
-# ── Windows 打包模式：把用户数据目录指向 %APPDATA%\Rivus ──────────────────────
-# 仅在 PyInstaller 打包 + Windows 下生效，不影响 macOS / 开发模式
+# ── Windows packaged mode: redirect user data to %APPDATA%\Rivus ─────────────
+# Only applies when running as a PyInstaller bundle on Windows; no effect on macOS / dev mode
 if sys.platform == "win32" and getattr(sys, "frozen", False):
     if not os.environ.get("MEMORYVAULT_DATA_DIR"):
         _win_data = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Rivus")
         os.makedirs(_win_data, exist_ok=True)
         os.environ["MEMORYVAULT_DATA_DIR"] = _win_data
-    # 把打包内容根目录加入 PATH，确保 DLL 能被找到
+    # Add bundle root to PATH so DLLs can be found
     os.environ["PATH"] = sys._MEIPASS + os.pathsep + os.environ.get("PATH", "")
 
 import uvicorn
@@ -25,9 +25,10 @@ import webview
 from server import app as fastapi_app
 
 _window      = None
-_force_quit  = [False]  # True 时 on_closing 放行，允许真正退出
-_nswindow    = [None]   # on_closing 时捕获 NSWindow 引用，供 reopen 使用
-_app_delegate = [None]  # 持有 delegate 强引用，防止 Python GC 回收
+_port        = [None]   # set once server starts; used by download_doc
+_force_quit  = [False]  # set to True to allow the window to actually close
+_nswindow    = [None]   # NSWindow reference captured on close, used for reopen
+_app_delegate = [None]  # strong reference to delegate, prevents Python GC
 
 
 def find_free_port() -> int:
@@ -41,7 +42,7 @@ def run_server(port: int):
 
 
 class Api:
-    """暴露给前端 JS 调用的原生接口"""
+    """Native interface exposed to frontend JS"""
 
     def pick_pdf(self):
         result = _window.create_file_dialog(
@@ -56,6 +57,22 @@ class Api:
             webview.OPEN_DIALOG,
             allow_multiple=False,
             file_types=("Word Documents (*.docx)",),
+        )
+        return result[0] if result else None
+
+    def pick_excel(self):
+        result = _window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Excel Files (*.xlsx *.xls)",),
+        )
+        return result[0] if result else None
+
+    def pick_md(self):
+        result = _window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Markdown Files (*.md)",),
         )
         return result[0] if result else None
 
@@ -76,6 +93,21 @@ class Api:
             return None
         return result[0] if isinstance(result, (list, tuple)) else result
 
+    def download_doc(self, doc_id: int, suggested_filename: str):
+        """Download a document: show system Save dialog, then write file content from the server."""
+        save_path = self.pick_save_path(suggested_filename)
+        if not save_path:
+            return {"ok": False, "reason": "cancelled"}
+        try:
+            url = f"http://127.0.0.1:{_port[0]}/api/docs/{doc_id}/file"
+            with urllib.request.urlopen(url) as resp:
+                data = resp.read()
+            with open(save_path, "wb") as f:
+                f.write(data)
+            return {"ok": True, "path": save_path}
+        except Exception as e:
+            return {"ok": False, "reason": str(e)}
+
     def open_file(self, path: str):
         import subprocess
         try:
@@ -87,7 +119,7 @@ class Api:
                 subprocess.Popen(["xdg-open", path])
             return True
         except Exception as e:
-            print(f"[open_file] 错误: {e}")
+            print(f"[open_file] Error: {e}")
             return False
 
     def open_url(self, url: str):
@@ -96,7 +128,7 @@ class Api:
             webbrowser.open(url)
             return True
         except Exception as e:
-            print(f"[open_url] 错误: {e}")
+            print(f"[open_url] Error: {e}")
             return False
 
     def quit_app(self):
@@ -106,8 +138,8 @@ class Api:
 
 def _setup_macos():
     """
-    macOS 专属初始化，在 webview.start(func=...) 的后台线程中运行。
-    关键：_app_delegate[0] 保持对 delegate 的强引用，防止 Python GC。
+    macOS-specific initialization, runs in the background thread started by webview.start(func=...).
+    Key: _app_delegate[0] holds a strong reference to the delegate to prevent Python GC.
     """
     if sys.platform != "darwin":
         return
@@ -115,19 +147,19 @@ def _setup_macos():
         from AppKit import NSApplication, NSObject
         from objc import objc_method
 
-        # ── 1. 定义 App Delegate ──────────────────────────────────────────────
+        # ── 1. Define App Delegate ────────────────────────────────────────────
         class RivusDelegate(NSObject):
 
             @objc_method
             def applicationShouldHandleReopen_hasVisibleWindows_(self, app, hasVisibleWindows):
-                """Dock 图标点击 → 恢复窗口"""
+                """Dock icon click → restore window"""
                 from AppKit import NSApp
                 if _nswindow[0] is not None:
                     _nswindow[0].makeKeyAndOrderFront_(None)
                     NSApp.activateIgnoringOtherApps_(True)
-                    print("[dock] 窗口已恢复")
+                    print("[dock] Window restored")
                 else:
-                    print("[dock] reopen: _nswindow[0] 为 None，尝试 NSApp.windows()")
+                    print("[dock] reopen: _nswindow[0] is None, trying NSApp.windows()")
                     for w in NSApp.windows():
                         w.makeKeyAndOrderFront_(None)
                     NSApp.activateIgnoringOtherApps_(True)
@@ -135,8 +167,8 @@ def _setup_macos():
 
             @objc_method
             def applicationShouldTerminate_(self, sender):
-                """Dock 右键 Quit / Cmd+Q → 真正退出"""
-                print("[dock] applicationShouldTerminate_ 触发")
+                """Dock right-click Quit / Cmd+Q → actually quit"""
+                print("[dock] applicationShouldTerminate_ triggered")
                 _force_quit[0] = True
                 try:
                     _window.destroy()
@@ -145,16 +177,16 @@ def _setup_macos():
                 threading.Timer(1.0, lambda: os._exit(0)).start()
                 return 1  # NSTerminateNow
 
-        # ── 2. 实例化，存入模块级列表防 GC ──────────────────────────────────
+        # ── 2. Instantiate and store in module-level list to prevent GC ──────
         delegate_instance = RivusDelegate.alloc().init()
-        _app_delegate[0] = delegate_instance   # ← 关键：强引用保活
+        _app_delegate[0] = delegate_instance   # ← critical: keep strong reference alive
 
-        # ── 3. 在主线程上设置 delegate ──────────────────────────────────────
+        # ── 3. Set delegate on the main thread ───────────────────────────────
         class _Installer(NSObject):
             @objc_method
             def run_(self, _arg):
                 NSApplication.sharedApplication().setDelegate_(_app_delegate[0])
-                print("[dock] NSApp delegate 已设置，类型:",
+                print("[dock] NSApp delegate set, type:",
                       type(_app_delegate[0]).__name__)
 
         installer = _Installer.alloc().init()
@@ -163,12 +195,12 @@ def _setup_macos():
         )
 
     except Exception as e:
-        print(f"[dock] 初始化失败: {e}")
+        print(f"[dock] Initialization failed: {e}")
         import traceback; traceback.print_exc()
 
 
 if __name__ == "__main__":
-    # ── Windows 单实例检测 ────────────────────────────────────────────────────
+    # ── Windows single-instance check ────────────────────────────────────────
     if sys.platform == "win32":
         import ctypes
         _mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Global\\RivusAppMutex")
@@ -180,6 +212,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     PORT = find_free_port()
+    _port[0] = PORT
 
     t = threading.Thread(target=run_server, args=(PORT,), daemon=True)
     t.start()
@@ -203,9 +236,9 @@ if __name__ == "__main__":
 
     def on_closing():
         """
-        红色 X 点击：
-        - Windows：直接退出整个进程（uvicorn daemon 线程随之结束）
-        - macOS：隐藏窗口（Dock 图标点击可恢复）
+        Red X button handler:
+        - Windows: exit the entire process (uvicorn daemon thread exits with it)
+        - macOS: hide the window (Dock icon click can restore it)
         """
         if sys.platform == "win32":
             os._exit(0)
@@ -215,14 +248,14 @@ if __name__ == "__main__":
         try:
             from AppKit import NSApp
             wins = NSApp.windows()
-            print(f"[closing] NSApp.windows() 数量: {len(wins)}")
+            print(f"[closing] NSApp.windows() count: {len(wins)}")
             if wins:
                 _nswindow[0] = wins[0]
                 _nswindow[0].orderOut_(None)
-                print("[closing] 窗口已隐藏，引用已保存")
+                print("[closing] Window hidden, reference saved")
                 return False
         except Exception as e:
-            print(f"[closing] orderOut_ 失败: {e}")
+            print(f"[closing] orderOut_ failed: {e}")
         _window.hide()
         return False
 
