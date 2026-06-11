@@ -27,6 +27,7 @@
     --bg: var(--main-bg);
     --text: var(--text-primary);
     --border: #3a3a3a;
+    --code-bg: rgba(255,255,255,0.08);
   }
 
   @media (prefers-color-scheme: light) {
@@ -47,6 +48,7 @@
       --bg: #ffffff;
       --text: #1a1a1a;
       --border: #e0e0e0;
+      --code-bg: rgba(0,0,0,0.06);
     }
   }
 
@@ -151,18 +153,7 @@
   }
   .doc-item:hover { background: var(--sidebar-hover); }
   .doc-item:hover .doc-del { opacity: 1; }
-  .doc-code {
-    font-size: 9px;
-    color: var(--text-secondary);
-    opacity: 0;
-    flex-shrink: 0;
-    font-family: monospace;
-    letter-spacing: .03em;
-    transition: opacity .15s;
-  }
-  .doc-item:hover .doc-code { opacity: .6; }
-
-  .doc-icon { font-size: 14px; flex-shrink: 0; }
+.doc-icon { font-size: 14px; flex-shrink: 0; }
   .doc-title {
     flex: 1;
     font-size: 12.5px;
@@ -493,7 +484,43 @@
     color: var(--text-primary);
     border-bottom-left-radius: 4px;
     padding-left: 0;
+    white-space: normal;
   }
+  /* ── Markdown 渲染样式 ────────────────────────────────────── */
+  .ai .bubble p { margin: 0 0 0.55em; }
+  .ai .bubble p:last-child { margin-bottom: 0; }
+  .ai .bubble h1,.ai .bubble h2,.ai .bubble h3,.ai .bubble h4 {
+    font-weight: 600; line-height: 1.3; margin: 0.7em 0 0.25em;
+  }
+  .ai .bubble h1 { font-size: 1.15em; }
+  .ai .bubble h2 { font-size: 1.08em; }
+  .ai .bubble h3,.ai .bubble h4 { font-size: 1em; }
+  .ai .bubble ul,.ai .bubble ol { padding-left: 1.5em; margin: 0.2em 0 0.55em; }
+  .ai .bubble li { margin: 0.1em 0; line-height: 1.6; }
+  .ai .bubble pre {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre;
+    font-family: 'SF Mono','Menlo','Monaco','Consolas',monospace;
+  }
+  .ai .bubble code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: 'SF Mono','Menlo','Monaco','Consolas',monospace;
+    font-size: 0.87em;
+  }
+  .ai .bubble pre code { background: none; padding: 0; border-radius: 0; font-size: inherit; }
+  .ai .bubble hr { border: none; border-top: 1px solid var(--border); margin: 0.7em 0; }
+  .ai .bubble a { color: var(--accent); text-decoration: none; }
+  .ai .bubble a:hover { text-decoration: underline; }
+  .ai .bubble strong { font-weight: 600; }
+  .ai .bubble em { font-style: italic; opacity: 0.82; }
 
   .sources {
     margin-top: 12px;
@@ -710,6 +737,45 @@
     margin: 4px 0;
   }
   .ctx-danger { color: var(--danger) !important; }
+
+  /* ── Bulk selection ── */
+  .doc-checkbox {
+    display: none;
+    width: 15px; height: 15px;
+    flex-shrink: 0;
+    accent-color: var(--accent, #6c63ff);
+    cursor: pointer;
+  }
+  body.selecting .doc-checkbox { display: block; }
+  body.selecting .doc-item { cursor: pointer; }
+  body.selecting .doc-item.selected { background: color-mix(in srgb, var(--accent, #6c63ff) 18%, transparent); }
+
+  #bulk-bar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: color-mix(in srgb, var(--sidebar-bg) 95%, var(--accent, #6c63ff));
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+  body.selecting #bulk-bar { display: flex; }
+  #bulk-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+  #bulk-bar input[type=checkbox] { accent-color: var(--accent, #6c63ff); }
+  #bulk-count { flex: 1; color: var(--text-secondary); }
+  #bulk-delete-btn {
+    padding: 3px 10px; border-radius: 5px;
+    background: var(--danger); color: #fff;
+    border: none; font-size: 12px; cursor: pointer;
+  }
+  #bulk-delete-btn:disabled { opacity: .4; cursor: default; }
+  #bulk-cancel-btn {
+    padding: 3px 10px; border-radius: 5px;
+    background: var(--sidebar-hover); color: var(--text-primary);
+    border: 1px solid var(--border); font-size: 12px; cursor: pointer;
+  }
   .ctx-menu {
     position: fixed;
     z-index: 500;
@@ -956,15 +1022,21 @@
   }
   .tab-btn {
     flex: 1;
-    padding: 7px;
+    padding: 6px 4px;
     background: none;
     border: none;
     border-radius: 8px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     transition: background .12s, color .12s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    line-height: 1.2;
   }
+  .tab-btn .tab-icon { font-size: 18px; line-height: 1; }
   .tab-btn.active { background: var(--sidebar-active); color: var(--text-primary); }
 
   .tab-content { display: none; flex-direction: column; gap: 10px; }
@@ -1100,6 +1172,12 @@
     <span data-i18n="addBookmark">添加收藏</span>
   </button>
   <div style="height:1px;background:var(--border);margin:8px 10px 4px"></div>
+  <div id="bulk-bar">
+    <label><input type="checkbox" id="bulk-select-all" onchange="bulkToggleAll(this.checked)"> <span data-i18n="selectAll">全选</span></label>
+    <span id="bulk-count"></span>
+    <button id="bulk-delete-btn" onclick="bulkDelete()" disabled data-i18n="deleteSelected">删除所选</button>
+    <button id="bulk-cancel-btn" onclick="exitSelectMode()" data-i18n="cancelSelect">取消</button>
+  </div>
   <div class="doc-list" id="doc-list"></div>
   <div class="sidebar-footer">
     <button class="btn-settings" onclick="openSettings()">
@@ -1120,14 +1198,11 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 14 12 9 17 14"/><line x1="12" y1="9" x2="12" y2="21"/></svg>
       <span data-i18n="importBackup">导入备份</span>
     </button>
-    <div id="local-notice" style="font-size:13px;color:var(--sidebar-text);
-         text-align:left;padding:8px 10px;opacity:.7" data-i18n="localNotice">
-      🔒 数据存储在本机
-    </div>
-    <div style="font-size:13px;color:var(--sidebar-text);text-align:left;padding:0 10px 8px;opacity:.7;line-height:1.6">
-      By Kai Cao ·
+    <div style="font-size:13px;color:var(--sidebar-text);opacity:.7;
+         display:flex;flex-direction:column;gap:2px;padding:4px 0 6px">
+      <span style="padding:4px 10px" data-i18n="localNotice">🔒 数据存储在本机</span>
       <a href="#" onclick="openUrl('https://github.com/caokai1073/Rivus',event)"
-         style="color:var(--sidebar-text);text-decoration:none;"
+         style="color:var(--sidebar-text);text-decoration:none;padding:4px 10px;display:block"
          onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">
         ⭐ Star on GitHub
       </a>
@@ -1225,6 +1300,7 @@
     <div class="settings-tabs">
       <button class="settings-tab active" id="stab-cloud" onclick="switchSettingsTab('cloud')" data-i18n="settingsTabCloud">☁️ 云端模型</button>
       <button class="settings-tab" id="stab-local" onclick="switchSettingsTab('local')" data-i18n="settingsTabLocal">🖥️ 本地模型</button>
+      <button class="settings-tab" id="stab-remote" onclick="switchSettingsTab('remote')" data-i18n="settingsTabRemote">🌐 远程服务器</button>
     </div>
     <div class="settings-body">
       <!-- 云端 tab -->
@@ -1326,19 +1402,139 @@
           </div>
         </div>
       </div>
-    </div>
+      <!-- 远程服务器 tab -->
+      <div class="settings-tab-pane" id="spane-remote">
+        <!-- 连接状态（与本地模型 tab 风格统一） -->
+        <div class="settings-model-section" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+            <span id="remote-status-dot" style="width:8px;height:8px;border-radius:50%;background:#6b7280;flex-shrink:0"></span>
+            <span id="remote-status-text" style="color:var(--text-secondary)">未连接</span>
+          </div>
+        </div>
+
+        <div class="settings-model-section">
+          <div class="settings-model-label" data-i18n="remoteSshConfig">SSH 配置</div>
+
+          <!-- SSH 配置表单 -->
+          <div style="display:grid;gap:12px">
+
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+              <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteHost">主机 (Host)</div>
+                <input id="remote-host" type="text" placeholder="192.168.1.100 或 example.com" data-i18n-placeholder="remoteHostPlaceholder" style="
+                  width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                  border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                  font-size:13px;color:var(--text-primary);outline:none">
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteSshPort">SSH 端口</div>
+                <input id="remote-ssh-port" type="number" value="22" min="1" max="65535" style="
+                  width:72px;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                  border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                  font-size:13px;color:var(--text-primary);outline:none">
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteUser">用户名 (User)</div>
+              <input id="remote-user" type="text" placeholder="ubuntu / root / 留空则不指定" data-i18n-placeholder="remoteUserPlaceholder" style="
+                width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                font-size:13px;color:var(--text-primary);outline:none">
+            </div>
+
+            <!-- 认证方式切换 -->
+            <div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px" data-i18n="remoteAuthMode">认证方式</div>
+              <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <button id="remote-auth-key-btn" onclick="setRemoteAuth('key')" data-i18n="remoteAuthKey" style="
+                  flex:1;padding:6px;font-size:13px;border:none;cursor:pointer;
+                  background:var(--accent);color:#fff;transition:background .15s">🔑 SSH 密钥</button>
+                <button id="remote-auth-pwd-btn" onclick="setRemoteAuth('password')" data-i18n="remoteAuthPwd" style="
+                  flex:1;padding:6px;font-size:13px;border:none;cursor:pointer;
+                  background:var(--sidebar-hover,#1e1e2e);color:var(--text-secondary);transition:background .15s">🔐 密码</button>
+              </div>
+            </div>
+
+            <!-- 密钥路径（key 模式） -->
+            <div id="remote-auth-key-section">
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteKeyPath">SSH 私钥路径</div>
+              <input id="remote-key-path" type="text" placeholder="~/.ssh/id_rsa" style="
+                width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                font-size:13px;color:var(--text-primary);outline:none">
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:4px" data-i18n="remoteKeyHint">
+                留空则自动搜索 ~/.ssh/id_rsa、id_ed25519 等默认密钥。
+              </div>
+            </div>
+
+            <!-- 密码（password 模式） -->
+            <div id="remote-auth-pwd-section" style="display:none">
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remotePasswordLabel">SSH 密码</div>
+              <input id="remote-password" type="password" placeholder="输入 SSH 密码" data-i18n-placeholder="remotePasswordPlaceholder" style="
+                width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                font-size:13px;color:var(--text-primary);outline:none">
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:4px" data-i18n="remotePasswordHint">
+                密码仅在本次连接中使用，不会被保存到本地。
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteOllamaPort">远程 Ollama 端口</div>
+                <input id="remote-remote-port" type="number" value="11434" min="1" max="65535" style="
+                  width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                  border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                  font-size:13px;color:var(--text-primary);outline:none">
+              </div>
+              <div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px" data-i18n="remoteTunnelPort">本地隧道端口</div>
+                <input id="remote-local-port" type="number" value="11435" min="1024" max="65535" style="
+                  width:100%;box-sizing:border-box;background:var(--input-bg,#1e1e2e);
+                  border:1px solid var(--border);border-radius:6px;padding:7px 10px;
+                  font-size:13px;color:var(--text-primary);outline:none">
+              </div>
+            </div>
+
+          </div><!-- end grid -->
+
+        </div><!-- end SSH 配置 section -->
+
+        <!-- 错误信息 -->
+        <div id="remote-error" style="
+          display:none;margin-top:4px;padding:10px 12px;border-radius:6px;
+          background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);
+          font-size:12.5px;color:#f87171;line-height:1.5">
+        </div>
+
+        <!-- 远程模型列表（连接后显示）-->
+        <div id="remote-models-section" class="settings-model-section" style="display:none;margin-top:16px">
+          <div class="settings-model-label" data-i18n="remoteModelsTitle">🖥️ 远程服务器上的模型</div>
+          <div id="remote-models-list" style="font-size:13px;color:var(--text-secondary)"></div>
+        </div>
+
+      </div><!-- end spane-remote -->
+    </div><!-- end settings-body -->
+
     <div class="settings-save-row" id="settings-cloud-footer">
       <button class="setup-btn" onclick="saveSettingsCloud()" data-i18n="settingsSave">保存</button>
     </div>
     <div class="settings-save-row" id="settings-local-footer" style="display:none">
       <button class="setup-btn" onclick="saveOllamaOptions()" data-i18n="settingsSave">保存</button>
     </div>
+    <div class="settings-save-row" id="settings-remote-footer" style="display:none">
+      <button class="setup-btn" id="remote-connect-btn" onclick="remoteConnect()">连接</button>
+    </div>
   </div>
 </div>
 
 <div class="ctx-menu" id="ctx-menu">
   <div class="ctx-item" onclick="ctxQuote()">📎 <span data-i18n="ctxQuote">引用</span></div>
+  <div class="ctx-item" id="ctx-open-file" onclick="ctxOpenFile()">📂 <span data-i18n="ctxOpenFile">打开文件</span></div>
+  <div class="ctx-item" id="ctx-download" onclick="ctxDownload()">⬇️ <span data-i18n="ctxDownload">下载</span></div>
   <div class="ctx-item" onclick="ctxRename()">✏️ <span data-i18n="ctxRename">改名</span></div>
+  <div class="ctx-item" onclick="ctxEnterSelect()">☑️ <span data-i18n="ctxSelect">选择</span></div>
   <div class="ctx-divider"></div>
   <div class="ctx-item ctx-danger" onclick="ctxDelete()">🗑️ <span data-i18n="ctxDelete">删除</span></div>
 </div>
@@ -1424,10 +1620,12 @@
   <div class="modal">
     <h3 data-i18n="addBookmark">添加收藏</h3>
     <div class="tab-row">
-      <button class="tab-btn active" onclick="switchTab('url', this)">🔗 URL</button>
-      <button class="tab-btn" onclick="switchTab('text', this)" data-i18n="tabText">📝 文本</button>
-      <button class="tab-btn" onclick="switchTab('pdf', this)">📄 PDF</button>
-      <button class="tab-btn" onclick="switchTab('docx', this)">📝 Word</button>
+      <button class="tab-btn active" onclick="switchTab('url', this)"><span class="tab-icon">🔗</span>URL</button>
+      <button class="tab-btn" onclick="switchTab('text', this)"><span class="tab-icon">📝</span><span data-i18n="tabTextLabel">文本</span></button>
+      <button class="tab-btn" onclick="switchTab('pdf', this)"><span class="tab-icon">📄</span>PDF</button>
+      <button class="tab-btn" onclick="switchTab('docx', this)"><span class="tab-icon">📝</span>Word</button>
+      <button class="tab-btn" onclick="switchTab('md', this)"><span class="tab-icon">📋</span><span data-i18n="tabMdLabel">Md</span></button>
+      <button class="tab-btn" onclick="switchTab('excel', this)"><span class="tab-icon">📊</span>Excel</button>
     </div>
 
     <div class="tab-content active" id="tab-url">
@@ -1461,10 +1659,40 @@
       </div>
     </div>
 
+    <div class="tab-content" id="tab-md">
+      <input id="md-title" type="text" data-i18n-placeholder="pdfTitleHint" placeholder="自定义标题（留空则使用文件名）" />
+      <div class="file-drop" id="md-drop"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleMdDrop(event)"
+          onclick="pickMd()">
+        <input type="file" id="md-file" accept=".md" onchange="updateMdLabel()" style="display:none" />
+        <div id="md-label" data-i18n="dropMd">点击选择或拖入 Markdown 文件</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-excel">
+      <input id="excel-title" type="text" data-i18n-placeholder="pdfTitleHint" placeholder="自定义标题（留空则使用文件名）" />
+      <div class="file-drop" id="excel-drop"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleExcelDrop(event)"
+          onclick="pickExcel()">
+        <input type="file" id="excel-file" accept=".xlsx,.xls" onchange="updateExcelLabel()" style="display:none" />
+        <div id="excel-label" data-i18n="dropExcel">点击选择或拖入 Excel 文件</div>
+      </div>
+    </div>
+
     <select id="folder-select" class="modal-folder-select">
       <option value="" data-i18n="noFolder">📂 不加入文件夹</option>
     </select>
 
+    <div id="modal-progress-wrap" style="display:none;margin-top:10px">
+      <div style="height:4px;background:var(--sidebar-active);border-radius:2px;overflow:hidden;margin-bottom:5px">
+        <div id="modal-progress-bar" style="height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width .25s ease"></div>
+      </div>
+      <div id="modal-progress-label" style="font-size:11px;color:var(--text-secondary);text-align:center"></div>
+    </div>
     <div class="modal-status" id="modal-status"></div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal()" data-i18n="cancel">取消</button>
@@ -1484,10 +1712,16 @@ let pinnedDoc = null;  // { id, title } — 当前引用的文档
 let ctxTargetDoc = null;
 const ctxMenu = document.getElementById('ctx-menu');
 
-function showCtxMenu(e, docId, docTitle) {
+function showCtxMenu(e, docId, docTitle, docUrl, docSource) {
   e.preventDefault();
   e.stopPropagation();
-  ctxTargetDoc = { id: docId, title: docTitle };
+  ctxTargetDoc = { id: docId, title: docTitle, url: docUrl || '', source: docSource || '' };
+  // Show "Open file" for local file paths or User-typed text (downloadable as .txt)
+  const isLocalFile = docUrl && !docUrl.startsWith('http://') && !docUrl.startsWith('https://');
+  const isUserText  = (docSource || '') === 'User';
+  const hasFile = isLocalFile || isUserText;
+  document.getElementById('ctx-open-file').style.display = hasFile ? '' : 'none';
+  document.getElementById('ctx-download').style.display  = hasFile ? '' : 'none';
   ctxMenu.style.left = e.clientX + 'px';
   ctxMenu.style.top  = e.clientY + 'px';
   ctxMenu.classList.add('show');
@@ -1540,9 +1774,161 @@ function ctxQuote() {
   updateSendBtn();
 }
 
+async function ctxOpenFile() {
+  hideCtxMenu();
+  if (!ctxTargetDoc) return;
+  const { id, title } = ctxTargetDoc;
+  if (window.pywebview && window.pywebview.api) {
+    // Native mode: resolve path on server, then open with system default app
+    try {
+      const r = await fetch(`/api/docs/${id}/open-path`);
+      if (r.ok) {
+        const { path } = await r.json();
+        window.pywebview.api.open_file(path);
+      } else {
+        const err = await r.json().catch(() => ({}));
+        alert(err.detail || 'File not found. Try re-uploading the document.');
+      }
+    } catch (e) {
+      alert('Failed to open file: ' + e.message);
+    }
+  } else {
+    // Browser mode: download via backend endpoint
+    const a = document.createElement('a');
+    a.href = `/api/docs/${id}/file`;
+    a.download = title || 'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
+async function openSourceFile(docId) {
+  if (window.pywebview && window.pywebview.api) {
+    try {
+      const r = await fetch(`/api/docs/${docId}/open-path`);
+      if (r.ok) {
+        const { path } = await r.json();
+        window.pywebview.api.open_file(path);
+      } else {
+        const err = await r.json().catch(() => ({}));
+        alert(err.detail || 'File not found.');
+      }
+    } catch (e) { alert('Failed to open file: ' + e.message); }
+  } else {
+    window.open(`/api/docs/${docId}/file`, '_blank');
+  }
+}
+
+async function ctxDownload() {
+  hideCtxMenu();
+  if (!ctxTargetDoc) return;
+  const { id, title, url, source } = ctxTargetDoc;
+  // Guess extension from url or source
+  const ext = url ? (url.match(/\.\w+$/) || [''])[0]
+              : source === 'User' ? '.txt' : '';
+  const filename = (title || 'document') + ext;
+  if (window.pywebview && window.pywebview.api) {
+    const res = await window.pywebview.api.download_doc(id, filename);
+    if (res && !res.ok && res.reason !== 'cancelled') {
+      alert('Download failed: ' + res.reason);
+    }
+  } else {
+    const a = document.createElement('a');
+    a.href = `/api/docs/${id}/file`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
 function clearRef() {
   pinnedDoc = null;
   document.getElementById('ref-chip-row').classList.remove('show');
+}
+
+// ── Bulk / selection mode ──────────────────────────────
+let selectedIds = new Set();
+
+function enterSelectMode(firstId) {
+  document.body.classList.add('selecting');
+  selectedIds.clear();
+  if (firstId != null) {
+    selectedIds.add(firstId);
+    const el = document.querySelector(`.doc-item[data-id="${firstId}"]`);
+    if (el) {
+      el.classList.add('selected');
+      const cb = el.querySelector('.doc-checkbox');
+      if (cb) cb.checked = true;
+    }
+  }
+  updateBulkBar();
+}
+
+function exitSelectMode() {
+  document.body.classList.remove('selecting');
+  selectedIds.clear();
+  document.querySelectorAll('.doc-item.selected').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll('.doc-checkbox').forEach(cb => cb.checked = false);
+  document.getElementById('bulk-select-all').checked = false;
+  updateBulkBar();
+}
+
+function toggleSelectDoc(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  const el = document.querySelector(`.doc-item[data-id="${id}"]`);
+  if (el) el.classList.toggle('selected', checked);
+  updateBulkBar();
+}
+
+function bulkToggleAll(checked) {
+  document.querySelectorAll('.doc-item[data-id]').forEach(el => {
+    const id = Number(el.dataset.id);
+    const cb = el.querySelector('.doc-checkbox');
+    if (checked) { selectedIds.add(id); el.classList.add('selected'); }
+    else { selectedIds.delete(id); el.classList.remove('selected'); }
+    if (cb) cb.checked = checked;
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  const countEl = document.getElementById('bulk-count');
+  const delBtn  = document.getElementById('bulk-delete-btn');
+  countEl.textContent = n > 0 ? (lang === 'zh' ? `已选 ${n} 项` : `${n} selected`) : '';
+  delBtn.disabled = n === 0;
+}
+
+function docItemClick(e, id) {
+  if (!document.body.classList.contains('selecting')) return;
+  // clicking anywhere on the row toggles selection
+  if (e.target.type === 'checkbox') return; // checkbox has its own handler
+  const now = !selectedIds.has(id);
+  toggleSelectDoc(id, now);
+  const el = document.querySelector(`.doc-item[data-id="${id}"] .doc-checkbox`);
+  if (el) el.checked = now;
+}
+
+function ctxEnterSelect() {
+  hideCtxMenu();
+  enterSelectMode(ctxTargetDoc ? ctxTargetDoc.id : null);
+}
+
+async function bulkDelete() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  const msg = lang === 'zh' ? `确认删除所选 ${ids.length} 项？` : `Delete ${ids.length} selected items?`;
+  if (!confirm(msg)) return;
+  await fetch('/api/docs', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  exitSelectMode();
+  await loadDocs();
 }
 
 // ── Setup wizard ──────────────────────────────────────
@@ -1813,11 +2199,13 @@ function localSkipToNext() { runNextPhase(); }
 
 // ── Phase cloud ───────────────────────────────────────
 const CLOUD_PROVIDERS_UI = {
-  deepseek:  { name: 'DeepSeek',           hint: '从 platform.deepseek.com 获取',  hintEn: 'Get from platform.deepseek.com',  icon: '🤖' },
-  openai:    { name: 'OpenAI / ChatGPT',   hint: '从 platform.openai.com 获取',    hintEn: 'Get from platform.openai.com',    icon: '🟢' },
-  anthropic: { name: 'Anthropic / Claude', hint: '从 console.anthropic.com 获取',  hintEn: 'Get from console.anthropic.com',  icon: '🔶' },
-  minimax:   { name: 'MiniMax',            hint: '从 platform.minimax.chat 获取',  hintEn: 'Get from platform.minimax.chat',  icon: '🟣' },
-  glm:       { name: '智谱 GLM',            hint: '从 open.bigmodel.cn 获取',       hintEn: 'Get from open.bigmodel.cn',       icon: '🔵' },
+  openai:    { name: 'OpenAI / ChatGPT',   hint: '从 platform.openai.com 获取',          hintEn: 'Get from platform.openai.com',          icon: '🟢' },
+  anthropic: { name: 'Anthropic / Claude', hint: '从 console.anthropic.com 获取',        hintEn: 'Get from console.anthropic.com',        icon: '🔶' },
+  qwen:      { name: 'Qwen / 通义千问',     hint: '从 dashscope.console.aliyun.com 获取', hintEn: 'Get from dashscope.console.aliyun.com', icon: '🟠' },
+  nvidia:    { name: 'NVIDIA NIM',          hint: '从 build.nvidia.com 获取',             hintEn: 'Get from build.nvidia.com',             icon: '🟩' },
+  deepseek:  { name: 'DeepSeek',           hint: '从 platform.deepseek.com 获取',        hintEn: 'Get from platform.deepseek.com',        icon: '🤖' },
+  minimax:   { name: 'MiniMax',            hint: '从 platform.minimax.chat 获取',        hintEn: 'Get from platform.minimax.chat',        icon: '🟣' },
+  glm:       { name: 'GLM',                hint: '从 open.bigmodel.cn 获取',             hintEn: 'Get from open.bigmodel.cn',             icon: '🔵' },
 };
 
 function showCloudPhase() {
@@ -1840,7 +2228,7 @@ function showCloudPhase() {
     </div>
   `).join('');
   // 默认展开第一个
-  toggleCloudBlock('deepseek');
+  toggleCloudBlock('openai');
 }
 
 function toggleCloudBlock(pid) {
@@ -1926,7 +2314,8 @@ async function init() {
   await loadModels();
   checkSetup();
   checkEmbedReady();   // 预热状态提示
-  checkForUpdate();    // 静默检查更新
+  checkForUpdate();    // 启动时检查更新
+  setInterval(checkForUpdate, 6 * 60 * 60 * 1000);  // 每 6 小时再检查一次
   document.getElementById('q-input').addEventListener('input', () => {
     const v = document.getElementById('q-input').value.trim();
     document.getElementById('send-btn').disabled = !v || isStreaming;
@@ -2076,6 +2465,9 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     openSearch();
   }
+  if (e.key === 'Escape' && document.body.classList.contains('selecting')) {
+    exitSelectMode();
+  }
 });
 
 // ── 导出备份 ──────────────────────────────────────────
@@ -2182,6 +2574,76 @@ function updateDocxLabel() {
   document.getElementById('docx-label').textContent = f ? `📝 ${f.name}` : t('dropDocx');
 }
 
+// ── Excel (.xlsx) 导入 ────────────────────────────────
+let nativeExcelPath = null;
+
+async function pickExcel() {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_excel) {
+    try {
+      const path = await window.pywebview.api.pick_excel();
+      if (path) {
+        nativeExcelPath = path;
+        document.getElementById('excel-label').textContent = `📊 ${path.split('/').pop()}`;
+      }
+      return;
+    } catch(e) { /* 退回浏览器方式 */ }
+  }
+  document.getElementById('excel-file').click();
+}
+
+function handleExcelDrop(e) {
+  e.preventDefault();
+  document.getElementById('excel-drop').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+    nativeExcelPath = null;
+    const dt = new DataTransfer(); dt.items.add(file);
+    document.getElementById('excel-file').files = dt.files;
+    updateExcelLabel();
+  }
+}
+
+function updateExcelLabel() {
+  nativeExcelPath = null;
+  const f = document.getElementById('excel-file').files[0];
+  document.getElementById('excel-label').textContent = f ? `📊 ${f.name}` : t('dropExcel');
+}
+
+// ── Markdown (.md) 导入 ───────────────────────────────
+let nativeMdPath = null;
+
+async function pickMd() {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_md) {
+    try {
+      const path = await window.pywebview.api.pick_md();
+      if (path) {
+        nativeMdPath = path;
+        document.getElementById('md-label').textContent = `📋 ${path.split('/').pop()}`;
+      }
+      return;
+    } catch(e) { /* 退回浏览器方式 */ }
+  }
+  document.getElementById('md-file').click();
+}
+
+function handleMdDrop(e) {
+  e.preventDefault();
+  document.getElementById('md-drop').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && (file.name.endsWith('.md') || file.type === 'text/markdown')) {
+    nativeMdPath = null;
+    const dt = new DataTransfer(); dt.items.add(file);
+    document.getElementById('md-file').files = dt.files;
+    updateMdLabel();
+  }
+}
+
+function updateMdLabel() {
+  nativeMdPath = null;
+  const f = document.getElementById('md-file').files[0];
+  document.getElementById('md-label').textContent = f ? `📋 ${f.name}` : t('dropMd');
+}
+
 // ── Docs + Folders ────────────────────────────────────
 const icons = { 'PDF': '📄', 'manual': '📝', '手动输入': '📝' };
 let openFolders = new Set();
@@ -2204,14 +2666,23 @@ function docItemHTML(d, inFolder = false) {
     titleEl = `<span class="doc-title" title="${escaped}">${title}</span>`;
   }
 
+  const SOURCE_LABEL = { 'Markdown': 'Md', '手动输入': 'User', 'manual': 'User' };
+  const KNOWN_SOURCES = new Set(['PDF', 'Word', 'Excel', 'Markdown', 'Md', '手动输入', 'manual', 'URL', 'Text']);
+  const rawSource = d.source || '';
+  const sourceLabel = SOURCE_LABEL[rawSource]
+    || (!KNOWN_SOURCES.has(rawSource) && rawSource ? 'Link' : rawSource);
+
   const escapedTitle = title.replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+  const escapedUrlBt = (d.url || '').replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+  const escapedSrc   = (d.source || '').replace(/`/g, '\\`');
   return `<div class="doc-item" draggable="true" data-id="${d.id}" data-folder="${d.folder_id||''}"
       ondragstart="dragStart(event,${d.id})" ondragend="dragEnd(event)"
-      oncontextmenu="showCtxMenu(event,${d.id},\`${escapedTitle}\`)" data-title="${escaped}">
+      oncontextmenu="showCtxMenu(event,${d.id},\`${escapedTitle}\`,\`${escapedUrlBt}\`,\`${escapedSrc}\`)"
+      onclick="docItemClick(event,${d.id})" data-title="${escaped}">
+    <input type="checkbox" class="doc-checkbox" data-id="${d.id}" onclick="event.stopPropagation();toggleSelectDoc(${d.id},this.checked)">
     <span class="doc-icon">${icon}</span>
     ${titleEl}
-    <span class="doc-source">${d.source}</span>
-    <span class="doc-code" title="添加时间">${fmtCode(d.created_at)}</span>
+    <span class="doc-source">${sourceLabel}</span>
   </div>`;
 }
 
@@ -2230,6 +2701,7 @@ function openUrl(url, e) {
 }
 
 async function loadDocs() {
+  if (document.body.classList.contains('selecting')) exitSelectMode();
   const [docsRes, foldersRes] = await Promise.all([fetch('/api/docs'), fetch('/api/folders')]);
   const docs = await docsRes.json();
   const folders = await foldersRes.json();
@@ -2434,6 +2906,97 @@ function stopQuery() {
   _setStreamingUI(false);
 }
 
+// ── Markdown 渲染 ─────────────────────────────────────────────
+function parseMarkdown(text) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function inline(s) {
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    s = s.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return s;
+  }
+
+  const lines = text.split('\n');
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 代码块
+    if (line.startsWith('```')) {
+      const code = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        code.push(esc(lines[i]));
+        i++;
+      }
+      if (i < lines.length) i++;
+      out.push(`<pre><code>${code.join('\n')}</code></pre>`);
+      continue;
+    }
+
+    // 标题
+    const hm = line.match(/^(#{1,6})\s+(.*)/);
+    if (hm) {
+      const lvl = hm[1].length;
+      out.push(`<h${lvl}>${inline(esc(hm[2]))}</h${lvl}>`);
+      i++; continue;
+    }
+
+    // 分隔线
+    if (/^(\*{3,}|-{3,}|_{3,})$/.test(line.trim())) {
+      out.push('<hr>');
+      i++; continue;
+    }
+
+    // 无序列表
+    if (/^[*\-+]\s/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[*\-+]\s/.test(lines[i])) {
+        items.push(`<li>${inline(esc(lines[i].replace(/^[*\-+]\s+/, '')))}</li>`);
+        i++;
+      }
+      out.push(`<ul>${items.join('')}</ul>`);
+      continue;
+    }
+
+    // 有序列表
+    if (/^\d+\.\s/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(`<li>${inline(esc(lines[i].replace(/^\d+\.\s+/, '')))}</li>`);
+        i++;
+      }
+      out.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
+
+    // 空行（段落分隔）
+    if (line.trim() === '') { i++; continue; }
+
+    // 普通段落（收集连续文本行）
+    const para = [];
+    while (i < lines.length) {
+      const l = lines[i];
+      if (l.trim() === '' || l.startsWith('```') ||
+          /^#{1,6}\s/.test(l) || /^[*\-+]\s/.test(l) ||
+          /^\d+\.\s/.test(l) || /^(\*{3,}|-{3,}|_{3,})$/.test(l.trim())) break;
+      para.push(inline(esc(l)));
+      i++;
+    }
+    if (para.length) out.push(`<p>${para.join('<br>')}</p>`);
+  }
+
+  return out.join('');
+}
+
 async function sendQuery() {
   const input = document.getElementById('q-input');
   const q = input.value.trim();
@@ -2471,7 +3034,7 @@ async function sendQuery() {
       const data = JSON.parse(e.data);
       if (data.type === 'token') {
         text += data.content;
-        aiBubble.textContent = text;
+        aiBubble.innerHTML = parseMarkdown(text);
         aiBubble.appendChild(cursor);
         document.getElementById('chat-area').scrollTop = 999999;
       } else if (data.type === 'sources') {
@@ -2480,6 +3043,10 @@ async function sendQuery() {
         const sourcesDiv = document.createElement('div');
         sourcesDiv.className = 'sources';
         sourcesDiv.innerHTML = data.sources.map(s => {
+          const isLocal = s.url && !s.url.startsWith('http://') && !s.url.startsWith('https://');
+          if (isLocal && s.doc_id) {
+            return `<a class="source-chip" style="cursor:pointer" onclick="openSourceFile(${s.doc_id})"><span>📎 ${s.title}</span></a>`;
+          }
           const href = s.url ? `href="${s.url}" target="_blank"` : '';
           return `<a class="source-chip" ${href}><span>📎 ${s.title}</span></a>`;
         }).join('');
@@ -2529,7 +3096,10 @@ async function openModal() {
     folders.map(f => `<option value="${f.id}">📁 ${f.name}</option>`).join('');
   setTimeout(() => document.getElementById('url-input').focus(), 50);
 }
-function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+function closeModal() {
+  document.getElementById('overlay').classList.remove('show');
+  _resetModalProgress();
+}
 function closeModalIfBg(e) { if (e.target === document.getElementById('overlay')) closeModal(); }
 
 function switchTab(tab, btn) {
@@ -2584,6 +3154,93 @@ function setModalStatus(msg, type='') {
   el.className = 'modal-status ' + type;
 }
 
+function _resetModalProgress() {
+  document.getElementById('modal-progress-wrap').style.display = 'none';
+  document.getElementById('modal-progress-bar').style.width = '0%';
+  document.getElementById('modal-progress-label').textContent = '';
+}
+
+function _updateModalProgress(done, total, phase) {
+  const wrap  = document.getElementById('modal-progress-wrap');
+  const bar   = document.getElementById('modal-progress-bar');
+  const label = document.getElementById('modal-progress-label');
+  wrap.style.display = '';
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  bar.style.width = pct + '%';
+  const phaseMap = {
+    chunked:   lang === 'zh' ? '切块完成，开始生成向量…' : 'Chunked, generating embeddings…',
+    embedding: lang === 'zh' ? `向量化 ${done} / ${total} 块 (${pct}%)` : `Embedding ${done} / ${total} chunks (${pct}%)`,
+    saving:    lang === 'zh' ? '写入数据库…' : 'Saving to database…',
+  };
+  label.textContent = phaseMap[phase] || phase;
+}
+
+// 解析 SSE 文本块，更新进度，遇到 done/error 返回/抛出
+function _parseSSEChunk(text) {
+  // returns { result } on done, throws on error, returns null to continue
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data:')) continue;
+    let ev;
+    try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
+    if (ev.type === 'progress') {
+      _updateModalProgress(ev.done, ev.total, ev.phase);
+    } else if (ev.type === 'done') {
+      return ev.result;          // signal caller to return this
+    } else if (ev.type === 'error') {
+      throw Object.assign(new Error(ev.message), { detail: ev.message });
+    }
+  }
+  return undefined;              // not done yet
+}
+
+// 用 fetch 读取 SSE 流并更新进度，返回最终 result 或 throw Error
+// 优先用 ReadableStream 流式读取（实时进度）；若不支持则一次性读完再解析
+async function _fetchWithProgress(url, fd) {
+  const resp = await fetch(url, { method: 'POST', body: fd });
+  if (!resp.ok) {
+    let detail = '';
+    try { detail = (await resp.json()).detail || ''; } catch {}
+    throw Object.assign(new Error(detail || resp.statusText), { status: resp.status, detail });
+  }
+
+  // ── 尝试流式读取 ──
+  if (resp.body && typeof resp.body.getReader === 'function') {
+    try {
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        // 按行处理，保留末尾不完整行
+        const nl = buffer.lastIndexOf('\n');
+        if (nl >= 0) {
+          const result = _parseSSEChunk(buffer.slice(0, nl + 1));
+          buffer = buffer.slice(nl + 1);
+          if (result !== undefined) return result;
+        }
+      }
+      // 处理最后残余
+      if (buffer.trim()) {
+        const result = _parseSSEChunk(buffer);
+        if (result !== undefined) return result;
+      }
+    } catch (streamErr) {
+      // 如果 ReadableStream 中途失败，不是 SSE 业务错误就往上抛
+      if (streamErr.detail) throw streamErr;
+      // 否则 fall through 到 resp.text() 兜底
+    }
+    // 如果流结束了还没有 done 事件，先当作正常结束继续往下兜底
+  }
+
+  // ── 兜底：一次性读完再解析（兼容不支持流的 WKWebView 版本）──
+  const text = await resp.text().catch(() => '');
+  const result = _parseSSEChunk(text);
+  if (result !== undefined) return result;
+  throw new Error('Stream ended without result');
+}
+
 async function submitAdd() {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -2616,33 +3273,91 @@ async function submitAdd() {
       if (pdfTitle) fd.append('custom_title', pdfTitle);
       if (folderId) fd.append('folder_id', folderId);
 
+      let url;
       if (nativePdfPath) {
         fd.append('path', nativePdfPath);
-        res = await fetch('/api/ingest/pdf-path', { method: 'POST', body: fd });
+        url = '/api/ingest/pdf-path';
       } else {
         const file = document.getElementById('pdf-file').files[0];
         if (!file) { setModalStatus(t('pdfRequired'), 'error'); btn.disabled = false; return; }
         fd.append('file', file);
-        res = await fetch('/api/ingest/pdf', { method: 'POST', body: fd });
+        url = '/api/ingest/pdf';
       }
-    } else {
-      // docx
+      const data = await _fetchWithProgress(url, fd);
+      setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+      await loadDocs();
+      setTimeout(closeModal, 1200);
+      btn.disabled = false;
+      return;
+    } else if (currentTab === 'docx') {
       const docxTitle = document.getElementById('docx-title').value.trim();
       const fd = new FormData();
       if (docxTitle) fd.append('custom_title', docxTitle);
       if (folderId) fd.append('folder_id', folderId);
 
+      let url;
       if (nativeDocxPath) {
         fd.append('path', nativeDocxPath);
-        res = await fetch('/api/ingest/docx-path', { method: 'POST', body: fd });
+        url = '/api/ingest/docx-path';
       } else {
         const file = document.getElementById('docx-file').files[0];
         if (!file) { setModalStatus(t('docxRequired'), 'error'); btn.disabled = false; return; }
         fd.append('file', file);
-        res = await fetch('/api/ingest/docx', { method: 'POST', body: fd });
+        url = '/api/ingest/docx';
       }
+      const data = await _fetchWithProgress(url, fd);
+      setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+      await loadDocs();
+      setTimeout(closeModal, 1200);
+      btn.disabled = false;
+      return;
+    } else if (currentTab === 'excel') {
+      const excelTitle = document.getElementById('excel-title').value.trim();
+      const fd = new FormData();
+      if (excelTitle) fd.append('custom_title', excelTitle);
+      if (folderId) fd.append('folder_id', folderId);
+
+      let url;
+      if (nativeExcelPath) {
+        fd.append('path', nativeExcelPath);
+        url = '/api/ingest/excel-path';
+      } else {
+        const file = document.getElementById('excel-file').files[0];
+        if (!file) { setModalStatus(t('excelRequired'), 'error'); btn.disabled = false; return; }
+        fd.append('file', file);
+        url = '/api/ingest/excel';
+      }
+      const data = await _fetchWithProgress(url, fd);
+      setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+      await loadDocs();
+      setTimeout(closeModal, 1200);
+      btn.disabled = false;
+      return;
+    } else if (currentTab === 'md') {
+      const mdTitle = document.getElementById('md-title').value.trim();
+      const fd = new FormData();
+      if (mdTitle) fd.append('custom_title', mdTitle);
+      if (folderId) fd.append('folder_id', folderId);
+
+      let url;
+      if (nativeMdPath) {
+        fd.append('path', nativeMdPath);
+        url = '/api/ingest/md-path';
+      } else {
+        const file = document.getElementById('md-file').files[0];
+        if (!file) { setModalStatus(t('mdRequired'), 'error'); btn.disabled = false; return; }
+        fd.append('file', file);
+        url = '/api/ingest/md';
+      }
+      const data = await _fetchWithProgress(url, fd);
+      setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+      await loadDocs();
+      setTimeout(closeModal, 1200);
+      btn.disabled = false;
+      return;
     }
 
+    // ── URL / Text tabs (non-SSE, plain JSON response) ──
     if (!res.ok) {
       const err = await res.json();
       const detail = err.detail || '';
@@ -2666,7 +3381,17 @@ async function submitAdd() {
     await loadDocs();
     setTimeout(closeModal, 1200);
   } catch(e) {
-    setModalStatus('❌ ' + friendlyError(e.message), 'error');
+    const detail = e.detail || e.message || '';
+    if (detail.startsWith('__duplicate__')) {
+      const parts = detail.split('__').filter(Boolean);
+      const dupTitle = parts.slice(2).join('__');
+      const msg = lang === 'zh'
+        ? `「${dupTitle}」已在库中，无需重复添加。`
+        : `"${dupTitle}" is already in your library.`;
+      setModalStatus('ℹ️ ' + msg, 'error');
+    } else {
+      setModalStatus('❌ ' + friendlyError(detail), 'error');
+    }
   }
   btn.disabled = false;
 }
@@ -2680,6 +3405,8 @@ const LANGS = {
     clearChat:      '清空对话',
     welcome:        '把你的收藏变成可以对话的知识库。<br>先添加一些收藏，然后向我提问。',
     tabText:        '📝 文本',
+    tabTextLabel:   '文本',
+    tabMdLabel:     'Md',
     customTitleHint:'自定义标题（留空则自动提取）',
     titlePlaceholder:'标题',
     textPlaceholder:'粘贴文章或笔记内容...',
@@ -2702,6 +3429,12 @@ const LANGS = {
     unnamed:        '未命名',
     chunks:         '块',
     dropDocx:       '点击选择或拖入 Word 文件',
+    tabMd:          '📋 Markdown',
+    dropMd:         '点击选择或拖入 Markdown 文件',
+    mdRequired:     '请选择 Markdown 文件',
+    tabExcel:       '📊 Excel',
+    dropExcel:      '点击选择或拖入 Excel 文件',
+    excelRequired:  '请选择 Excel 文件',
     docxRequired:   '请选择 Word 文件',
     searchDocs:     '搜索收藏...',
     localNotice:    '🔒 数据存储在本机',
@@ -2716,8 +3449,14 @@ const LANGS = {
     errTimeout:     '请求超时，请稍后重试。',
     errGeneric:     '操作失败，请重试。',
     ctxQuote:       '引用',
+    ctxOpenFile:    '打开文件',
+    ctxDownload:    '下载',
     ctxRename:      '改名',
+    ctxSelect:      '选择',
     ctxDelete:      '删除',
+    selectAll:      '全选',
+    deleteSelected: '删除所选',
+    cancelSelect:   '取消',
     settingsTitle:  '⚙️ 设置',
     settingsBtn:    '设置',
     settingsTabCloud: '☁️ 云端模型',
@@ -2781,6 +3520,34 @@ const LANGS = {
     settingsDeletingModel: '删除中...',
     settingsDeleteFailed:  '删除失败：',
     settingsUnknownError:  '未知错误',
+    settingsTabRemote:     '🌐 远程服务器',
+    remoteNotConnected:    '未连接',
+    remoteTunnelBuilding:  '正在建立 SSH 隧道…',
+    remoteTunnelError:     '隧道进程运行中，但 Ollama 暂时无响应',
+    remoteConnectedTo:     '已连接到 {host}（本地端口 {port}）',
+    remoteHost:            '主机 (Host)',
+    remoteHostPlaceholder: '192.168.1.100 或 example.com',
+    remoteSshPort:         'SSH 端口',
+    remoteUser:            '用户名 (User)',
+    remoteUserPlaceholder: 'ubuntu / root / 留空则不指定',
+    remoteAuthMode:        '认证方式',
+    remoteAuthKey:         '🔑 SSH 密钥',
+    remoteAuthPwd:         '🔐 密码',
+    remoteKeyPath:         'SSH 私钥路径',
+    remoteKeyHint:         '留空则自动搜索 ~/.ssh/id_rsa、id_ed25519 等默认密钥。',
+    remotePasswordLabel:   'SSH 密码',
+    remotePasswordPlaceholder: '输入 SSH 密码',
+    remotePasswordHint:    '密码仅在本次连接中使用，不会被保存到本地。',
+    remoteOllamaPort:      '远程 Ollama 端口',
+    remoteTunnelPort:      '本地隧道端口',
+    remoteModelsTitle:     '🖥️ 远程服务器上的模型',
+    remoteNoModels:        '（未检测到模型，可用 ollama pull 下载）',
+    remoteConnect:         '连接',
+    remoteConnecting:      '连接中…',
+    remoteDisconnect:      '断开连接',
+    remoteConnectFailed:   '连接失败',
+    remoteRequestFailed:   '请求失败：',
+    remoteSshConfig:       'SSH 配置',
   },
   en: {
     appName:        'Rivus',
@@ -2789,6 +3556,8 @@ const LANGS = {
     clearChat:      'Clear Chat',
     welcome:        'Turn your bookmarks into a conversational knowledge base.<br>Add some bookmarks, then ask me anything.',
     tabText:        '📝 Text',
+    tabTextLabel:   'Text',
+    tabMdLabel:     'Md',
     customTitleHint:'Custom title (leave blank to auto-extract)',
     titlePlaceholder:'Title',
     textPlaceholder:'Paste article or note content...',
@@ -2811,6 +3580,12 @@ const LANGS = {
     unnamed:        'Untitled',
     chunks:         'chunks',
     dropDocx:       'Click to select or drag a Word file here',
+    tabMd:          '📋 Markdown',
+    dropMd:         'Click to select or drag a Markdown file here',
+    mdRequired:     'Please select a Markdown file',
+    tabExcel:       '📊 Excel',
+    dropExcel:      'Click to select or drag an Excel file here',
+    excelRequired:  'Please select an Excel file',
     docxRequired:   'Please select a Word file',
     searchDocs:     'Search bookmarks...',
     localNotice:    '🔒 All data stored locally',
@@ -2825,8 +3600,14 @@ const LANGS = {
     errTimeout:     'Request timed out. Please try again.',
     errGeneric:     'Something went wrong. Please try again.',
     ctxQuote:       'Quote',
+    ctxOpenFile:    'Open File',
+    ctxDownload:    'Download',
     ctxRename:      'Rename',
+    ctxSelect:      'Select',
     ctxDelete:      'Delete',
+    selectAll:      'Select All',
+    deleteSelected: 'Delete Selected',
+    cancelSelect:   'Cancel',
     settingsTitle:  '⚙️ Settings',
     settingsBtn:    'Settings',
     settingsTabCloud: '☁️ Cloud Models',
@@ -2890,6 +3671,34 @@ const LANGS = {
     settingsDeletingModel: 'Deleting...',
     settingsDeleteFailed:  'Delete failed: ',
     settingsUnknownError:  'Unknown error',
+    settingsTabRemote:     '🌐 Remote Server',
+    remoteNotConnected:    'Not connected',
+    remoteTunnelBuilding:  'Establishing SSH tunnel…',
+    remoteTunnelError:     'Tunnel active but Ollama not responding',
+    remoteConnectedTo:     'Connected to {host} (local port {port})',
+    remoteHost:            'Host',
+    remoteHostPlaceholder: '192.168.1.100 or example.com',
+    remoteSshPort:         'SSH Port',
+    remoteUser:            'Username',
+    remoteUserPlaceholder: 'ubuntu / root / leave blank to omit',
+    remoteAuthMode:        'Authentication',
+    remoteAuthKey:         '🔑 SSH Key',
+    remoteAuthPwd:         '🔐 Password',
+    remoteKeyPath:         'SSH Key Path',
+    remoteKeyHint:         'Leave blank to auto-detect ~/.ssh/id_rsa, id_ed25519, etc.',
+    remotePasswordLabel:   'SSH Password',
+    remotePasswordPlaceholder: 'Enter SSH password',
+    remotePasswordHint:    'Password is only used for this session and is never saved.',
+    remoteOllamaPort:      'Remote Ollama Port',
+    remoteTunnelPort:      'Local Tunnel Port',
+    remoteModelsTitle:     '🖥️ Models on Remote Server',
+    remoteNoModels:        '(No models found. Run ollama pull on the remote server.)',
+    remoteConnect:         'Connect',
+    remoteConnecting:      'Connecting…',
+    remoteDisconnect:      'Disconnect',
+    remoteConnectFailed:   'Connection failed',
+    remoteRequestFailed:   'Request failed: ',
+    remoteSshConfig:       'SSH Configuration',
   }
 };
 
@@ -2913,9 +3722,10 @@ function applyLang() {
   if (qi) qi.placeholder = t('inputPlaceholder');
   // 如果设置面板当前打开，重新渲染当前 tab
   if (document.getElementById('settings-overlay').classList.contains('show')) {
-    const activeTab = document.getElementById('stab-cloud').classList.contains('active') ? 'cloud' : 'local';
+    const activeTab = ['cloud','local','remote'].find(t => document.getElementById(`stab-${t}`)?.classList.contains('active')) || 'cloud';
     if (activeTab === 'cloud') renderSettingsCloudTab();
-    else renderSettingsLocalTab();
+    else if (activeTab === 'local') renderSettingsLocalTab();
+    else _refreshRemoteStatus();
   }
 }
 
@@ -3006,14 +3816,16 @@ function settingsOverlayClick(e) {
 }
 
 function switchSettingsTab(tab) {
-  ['cloud','local'].forEach(t => {
+  ['cloud','local','remote'].forEach(t => {
     document.getElementById(`stab-${t}`).classList.toggle('active', t === tab);
     document.getElementById(`spane-${t}`).classList.toggle('active', t === tab);
   });
-  document.getElementById('settings-cloud-footer').style.display = tab === 'cloud' ? '' : 'none';
-  document.getElementById('settings-local-footer').style.display = tab === 'local' ? '' : 'none';
-  if (tab === 'cloud') renderSettingsCloudTab();
-  if (tab === 'local') renderSettingsLocalTab();
+  document.getElementById('settings-cloud-footer').style.display  = tab === 'cloud'  ? '' : 'none';
+  document.getElementById('settings-local-footer').style.display  = tab === 'local'  ? '' : 'none';
+  document.getElementById('settings-remote-footer').style.display = tab === 'remote' ? '' : 'none';
+  if (tab === 'cloud')  renderSettingsCloudTab();
+  if (tab === 'local')  renderSettingsLocalTab();
+  if (tab === 'remote') renderSettingsRemoteTab();
 }
 
 // 云端 tab
@@ -3256,6 +4068,159 @@ async function saveOllamaOptions() {
     btn.textContent = t('ollamaOptsSaved');
     setTimeout(() => btn.textContent = orig, 1800);
   } catch(e) { alert('保存失败: ' + e.message); }
+}
+
+// ── Remote Server tab ─────────────────────────────────────────────────────────
+
+let _remoteConnected = false;
+
+function setRemoteAuth(mode) {
+  const isKey = mode === 'key';
+  document.getElementById('remote-auth-key-section').style.display = isKey ? '' : 'none';
+  document.getElementById('remote-auth-pwd-section').style.display = isKey ? 'none' : '';
+  // 按钮高亮
+  document.getElementById('remote-auth-key-btn').style.background = isKey
+    ? 'var(--accent)' : 'var(--sidebar-hover,#1e1e2e)';
+  document.getElementById('remote-auth-key-btn').style.color = isKey ? '#fff' : 'var(--text-secondary)';
+  document.getElementById('remote-auth-pwd-btn').style.background = isKey
+    ? 'var(--sidebar-hover,#1e1e2e)' : 'var(--accent)';
+  document.getElementById('remote-auth-pwd-btn').style.color = isKey ? 'var(--text-secondary)' : '#fff';
+  // 记录当前模式
+  document.getElementById('remote-auth-key-btn').dataset.mode = mode;
+}
+
+async function renderSettingsRemoteTab() {
+  // 加载已保存配置
+  try {
+    const res = await fetch('/api/remote/config');
+    const cfg = await res.json();
+    document.getElementById('remote-host').value         = cfg.host        || '';
+    document.getElementById('remote-user').value         = cfg.user        || '';
+    document.getElementById('remote-ssh-port').value    = cfg.ssh_port    || 22;
+    document.getElementById('remote-key-path').value    = cfg.key_path    || '~/.ssh/id_rsa';
+    document.getElementById('remote-remote-port').value = cfg.remote_port || 11434;
+    document.getElementById('remote-local-port').value  = cfg.local_port  || 11435;
+    setRemoteAuth(cfg.auth_mode || 'key');
+  } catch(e) {}
+
+  // 查询连接状态
+  await _refreshRemoteStatus();
+}
+
+async function _refreshRemoteStatus() {
+  try {
+    const res  = await fetch('/api/remote/status');
+    const data = await res.json();
+    _remoteConnected = data.connected && !data.error;
+    _updateRemoteStatusUI(data);
+  } catch(e) {
+    _remoteConnected = false;
+    _updateRemoteStatusUI({connected: false});
+  }
+}
+
+function _updateRemoteStatusUI(data) {
+  const dot  = document.getElementById('remote-status-dot');
+  const text = document.getElementById('remote-status-text');
+  const btn  = document.getElementById('remote-connect-btn');
+  const modelsSection = document.getElementById('remote-models-section');
+  const modelsList    = document.getElementById('remote-models-list');
+
+  if (data.connected && !data.error) {
+    dot.style.background  = '#4ade80';
+    text.style.color      = '#4ade80';
+    text.textContent      = t('remoteConnectedTo').replace('{host}', data.host).replace('{port}', data.local_port);
+    btn.textContent       = t('remoteDisconnect');
+    btn.style.background  = 'rgba(248,113,113,.18)';
+    btn.style.color       = '#f87171';
+    btn.onclick           = remoteDisconnect;
+    modelsSection.style.display = '';
+    if (data.models && data.models.length) {
+      modelsList.innerHTML = data.models.map(m =>
+        `<div style="padding:4px 0;border-bottom:1px solid var(--border,#2e2e42);font-size:13px">${m}</div>`
+      ).join('');
+    } else {
+      modelsList.innerHTML = `<span style="color:var(--text-secondary)">${t('remoteNoModels')}</span>`;
+    }
+  } else if (data.connected && data.error) {
+    dot.style.background = '#f59e0b';
+    text.style.color     = '#f59e0b';
+    text.textContent     = t('remoteTunnelError');
+    btn.textContent      = t('remoteDisconnect');
+    btn.style.background = 'rgba(248,113,113,.18)';
+    btn.style.color      = '#f87171';
+    btn.onclick          = remoteDisconnect;
+    modelsSection.style.display = 'none';
+  } else {
+    dot.style.background = '#6b7280';
+    text.style.color     = 'var(--text-secondary)';
+    text.textContent     = t('remoteNotConnected');
+    btn.textContent      = t('remoteConnect');
+    btn.style.background = '';
+    btn.style.color      = '';
+    btn.onclick          = remoteConnect;
+    modelsSection.style.display = 'none';
+  }
+}
+
+async function remoteConnect() {
+  const btn = document.getElementById('remote-connect-btn');
+  const errEl = document.getElementById('remote-error');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = t('remoteConnecting');
+
+  // 状态点改为黄色表示进行中
+  document.getElementById('remote-status-dot').style.background = '#f59e0b';
+  document.getElementById('remote-status-text').textContent = t('remoteTunnelBuilding');
+  document.getElementById('remote-status-text').style.color = '#f59e0b';
+
+  const authMode = document.getElementById('remote-auth-key-section').style.display === 'none'
+    ? 'password' : 'key';
+  const payload = {
+    host:        document.getElementById('remote-host').value.trim(),
+    user:        document.getElementById('remote-user').value.trim(),
+    ssh_port:    parseInt(document.getElementById('remote-ssh-port').value) || 22,
+    auth_mode:   authMode,
+    key_path:    document.getElementById('remote-key-path').value.trim() || '~/.ssh/id_rsa',
+    password:    document.getElementById('remote-password').value,   // 不存到 config
+    remote_port: parseInt(document.getElementById('remote-remote-port').value) || 11434,
+    local_port:  parseInt(document.getElementById('remote-local-port').value) || 11435,
+  };
+
+  try {
+    const res  = await fetch('/api/remote/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      await _refreshRemoteStatus();
+      await loadModels();   // 刷新模型下拉（现在会列出远程模型）
+    } else {
+      errEl.textContent   = data.error || t('remoteConnectFailed');
+      errEl.style.display = '';
+      _updateRemoteStatusUI({connected: false});
+    }
+  } catch(e) {
+    errEl.textContent   = t('remoteRequestFailed') + e.message;
+    errEl.style.display = '';
+    _updateRemoteStatusUI({connected: false});
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function remoteDisconnect() {
+  const btn = document.getElementById('remote-connect-btn');
+  btn.disabled = true;
+  try {
+    await fetch('/api/remote/disconnect', {method: 'POST'});
+    await _refreshRemoteStatus();
+    await loadModels();   // 切回本地模型
+  } catch(e) {}
+  finally { btn.disabled = false; }
 }
 
 function settingsSelectModel(id) {
