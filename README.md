@@ -49,17 +49,24 @@ If you prefer cloud models (DeepSeek, OpenAI, Claude), Rivus supports those too.
 - **Web URLs** — paste a link, Rivus fetches and cleans the article automatically
 - **PDFs** — drag-and-drop or file picker, full text extracted
 - **Word documents** (.docx)
+- **Excel spreadsheets** (.xlsx) — each sheet converted to plain text with headers preserved
+- **Markdown files** (.md) — title extracted from first H1 heading
 - **Plain text** — paste directly into the editor
 - **Folder organization** — group documents into named collections
 
-### 🧠 Smart Retrieval (Hybrid RAG)
-Rivus doesn't just do keyword search. Every query goes through a multi-stage pipeline:
+### 🧠 Smart Retrieval & Agentic QA
+Rivus adapts its retrieval strategy to the model you're using:
 
-1. **Query expansion** — the LLM rephrases your question 2 ways to widen the net
-2. **Vector search** — semantic similarity via `BAAI/bge-m3` (1024-dim embeddings, stored in SQLite)
-3. **Full-text search** — BM25-ranked keyword match
-4. **RRF fusion** — Reciprocal Rank Fusion merges both result lists into one ranked set
-5. **Document-pinning** — reference a specific document directly in your question
+**Local models (Ollama) — Query Decomposition + Hybrid RAG**
+1. **Query decomposition** — the LLM breaks your question into 2–3 semantically distinct sub-questions, each targeting a different aspect of the answer
+2. **Vector search** — semantic similarity via `BAAI/bge-m3` (1024-dim embeddings), run separately per sub-question
+3. **Full-text search** — BM25-ranked keyword match on the original question
+4. **RRF fusion** — Reciprocal Rank Fusion merges all result lists into one ranked set
+
+**Cloud models — Tool-Use Agent**
+The LLM autonomously decides what to search and how many times, using three tools: `search_knowledge_base`, `get_document`, and `list_documents`. It iterates until it has enough context to answer fully.
+
+**Both modes:** document-pinning lets you reference a specific document directly (skips the agent, reads the full doc)
 
 ### 🤖 Local AI (Zero Cloud Required)
 - One-click Ollama integration — download and run models without touching the terminal
@@ -75,6 +82,13 @@ Rivus doesn't just do keyword search. Every query goes through a multi-stage pip
 | Anthropic | Claude Opus 4, Sonnet 4, Haiku 4 |
 | MiniMax | M1, Text-01 |
 | 智谱 GLM | GLM-4-Plus, GLM-Z1-Plus (Reasoning) |
+
+### 📂 Document Management
+- **Right-click context menu** on any document: Open File, Download, Rename, Quote, Select, Delete
+- **Open File** — opens PDF/Word/Excel/Markdown with your system's default app; User text entries are served as `.txt`
+- **Download** — shows a native Save dialog to save a copy anywhere on disk
+- **Bulk delete** — right-click → Select to enter selection mode; check multiple items and delete at once; Escape to cancel
+- **Source chips** — citations at the bottom of every AI answer are clickable; local files open directly, web links open in browser
 
 ### 🔒 Privacy First
 - All documents stored in a local SQLite database
@@ -99,8 +113,8 @@ Full English and Chinese interface — switches instantly without restart.
 
 | Platform | Download |
 |---|---|
-| macOS (Apple Silicon + Intel) | [Rivus-1.0.0.dmg](https://github.com/caokai1073/Rivus/releases) |
-| Windows 11/10 | [Rivus-1.0.0-setup.exe](https://github.com/caokai1073/Rivus/releases) |
+| macOS (Apple Silicon + Intel) | [Rivus-1.0.1.dmg](https://github.com/caokai1073/Rivus/releases) |
+| Windows 11/10 | [Rivus-1.0.1-setup.exe](https://github.com/caokai1073/Rivus/releases) |
 
 **macOS note:** After opening the DMG, drag Rivus to Applications. On first launch macOS may block it — go to **System Settings → Privacy & Security** and click "Open Anyway". This is standard for unsigned apps.
 
@@ -178,15 +192,17 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 ┌──────▼──────┐    ┌──────▼───────────────────────────┐
 │  query.py   │    │           ingest.py              │
 │             │    │                                  │
-│  1. Expand  │    │  URL → readability               │
-│  2. Embed   │    │  PDF → PyMuPDF                   │
-│  3. Vec     │    │  DOCX → python-docx              │
-│     search  │    │  Text → chunker                  │
-│  4. FTS     │    │  Chunks → BAAI/bge-m3 → vectors  │
-│  5. RRF     │    └──────────────────────────────────┘
-│  6. Prompt  │
-│  7. Stream  │    ┌──────────────────────────────────┐
-└──────┬──────┘    │           db.py                  │
+│  Local:     │    │  URL → readability               │
+│  Decompose  │    │  PDF → PyMuPDF                   │
+│  → Embed    │    │  DOCX → python-docx              │
+│  → Vec+FTS  │    │  XLSX → openpyxl                 │
+│  → RRF      │    │  Markdown → plain text           │
+│  → Stream   │    │  Text → chunker                  │
+│             │    │  Chunks → BAAI/bge-m3 → vectors  │
+│  Cloud:     │    └──────────────────────────────────┘
+│  Agent loop │
+│  (tools)    │    ┌──────────────────────────────────┐
+│  → Stream   │    │           db.py                  │
        │           │                                  │
        │           │  SQLite + sqlite-vec             │
        │           │  • documents table               │
@@ -206,6 +222,8 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 **Key design choices:**
 - **SQLite + sqlite-vec** — zero-dependency vector store; the entire knowledge base is a single `.db` file you can copy anywhere
 - **BAAI/bge-m3** — multilingual embedding model, handles Chinese and English in the same index without separate pipelines
+- **Query decomposition over simple expansion** — semantically distinct sub-questions retrieve complementary evidence rather than near-duplicate chunks
+- **Tool-use agent for cloud models** — lets the LLM decide how many searches to run and which documents to read, rather than a fixed retrieval budget
 - **RRF over re-ranking** — faster than a cross-encoder re-ranker, robust to vocabulary mismatch
 - **pywebview over Electron** — orders of magnitude smaller bundle size; no Node.js runtime
 
@@ -223,6 +241,7 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 | PDF parsing | [PyMuPDF](https://pymupdf.readthedocs.io/) |
 | Web parsing | [readability-lxml](https://github.com/buriy/python-readability) |
 | DOCX parsing | [python-docx](https://python-docx.readthedocs.io/) |
+| XLSX parsing | [openpyxl](https://openpyxl.readthedocs.io/) |
 | Frontend | Vanilla HTML/CSS/JS (no framework, no build step) |
 
 ---
@@ -235,7 +254,6 @@ These are features actively being considered. PRs welcome.
 - [ ] **PDF annotation** — highlight and save excerpts as notes
 - [ ] **Batch URL import** — paste a list of links and import all at once
 - [ ] **Scheduled re-fetch** — keep web articles fresh with periodic re-crawl
-- [ ] **Markdown / Obsidian vault import** — ingest `.md` files and directory trees
 - [ ] **OCR support** — extract text from scanned PDFs and images
 - [ ] **Graph view** — visualize connections between documents
 - [ ] **MCP server** — expose your knowledge base as a Model Context Protocol server, usable from Claude Desktop or any MCP-compatible client
@@ -249,7 +267,7 @@ Have something else in mind? [Open a feature request](https://github.com/caokai1
 
 ## Contributing
 
-Rivus is actively developed and warmly welcomes contributions. The codebase is intentionally small (~2,400 lines of Python + ~3,500 lines of HTML/JS) and has no build system — you can be productive in minutes.
+Rivus is actively developed and warmly welcomes contributions. The codebase is intentionally small (~2,500 lines of Python + ~4,000 lines of HTML/JS) and has no build system — you can be productive in minutes.
 
 ### Good First Issues
 
@@ -275,16 +293,17 @@ The frontend is plain HTML/JS in `ui/index.html` — no build step, just edit an
 ### Project Layout
 
 ```
-version1.0.0/
+Rivus/
 ├── app.py          # pywebview window setup, macOS Dock integration
 ├── server.py       # FastAPI routes (~50 endpoints)
-├── query.py        # RAG pipeline: expand → embed → search → fuse → prompt → stream
-├── ingest.py       # Document parsing and chunking
+├── query.py        # Agent system: decompose → embed → search → fuse → stream (local)
+│                   #              tool-use agent loop (cloud)
+├── ingest.py       # Document parsing and chunking (PDF, DOCX, XLSX, Markdown, URL, text)
 ├── db.py           # SQLite schema, vector search, FTS
 ├── config.py       # Settings persistence, cloud provider definitions
 ├── launcher.py     # Windows launcher (hides console, handles PATH)
 ├── ui/
-│   └── index.html  # Entire frontend (~3,500 lines, self-contained)
+│   └── index.html  # Entire frontend (~4,000 lines, self-contained)
 ├── build_app.sh    # macOS DMG build script
 └── build_windows.bat # Windows exe build (PyInstaller)
 ```
@@ -348,6 +367,8 @@ If Rivus is useful to you, a ⭐ on GitHub goes a long way.
 - **混合 RAG**：向量检索 + 全文检索 + RRF 融合 + Query 扩写，检索质量远超单纯关键词搜索
 - **支持本地模型**：通过 Ollama 一键下载运行 Qwen3、Llama 3、Gemma 3 等模型
 - **支持云端模型**：DeepSeek、OpenAI、Claude、智谱 GLM、MiniMax
+- **多格式导入**：PDF、Word、Excel、Markdown、网页 URL、纯文本
+- **文档管理**：右键菜单支持打开文件、下载、批量删除、引用、改名
 - **跨平台**：macOS + Windows 原生应用
 - **中英双语**：界面支持中英文随时切换
 

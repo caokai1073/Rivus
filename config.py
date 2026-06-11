@@ -1,10 +1,8 @@
 """
-config.py — 应用配置持久化（API 密钥等）
+config.py — Application configuration persistence (API keys, etc.)
 """
-APP_VERSION = "1.0.0"
-# 填入 GitHub releases API URL 后即可启用自动更新检测
-# 例: "https://api.github.com/repos/yourname/rivus/releases/latest"
-UPDATE_CHECK_URL = ""
+APP_VERSION = "1.0.1"
+UPDATE_CHECK_URL = "https://api.github.com/repos/caokai1073/Rivus/releases/latest"
 
 import json
 import os
@@ -16,16 +14,8 @@ CONFIG_PATH = (
     else Path(__file__).parent / "config.json"
 )
 
-# 云端提供商元数据
+# Cloud provider metadata
 CLOUD_PROVIDERS = {
-    "deepseek": {
-        "name": "DeepSeek",
-        "base_url": "https://api.deepseek.com/v1",
-        "models": [
-            {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
-            {"id": "deepseek-v4-pro",   "label": "DeepSeek V4 Pro"},
-        ],
-    },
     "openai": {
         "name": "OpenAI / ChatGPT",
         "base_url": "https://api.openai.com/v1",
@@ -47,6 +37,34 @@ CLOUD_PROVIDERS = {
             {"id": "claude-haiku-4-5-20251001","label": "Claude Haiku 4.5"},
         ],
     },
+    "qwen": {
+        "name": "Qwen / 通义千问",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": [
+            {"id": "qwen3-235b-a22b", "label": "Qwen3 235B · Flagship"},
+            {"id": "qwen3-72b",       "label": "Qwen3 72B"},
+            {"id": "qwen-max",        "label": "Qwen Max"},
+            {"id": "qwen-plus",       "label": "Qwen Plus"},
+            {"id": "qwen-turbo",      "label": "Qwen Turbo"},
+        ],
+    },
+    "nvidia": {
+        "name": "NVIDIA NIM",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "models": [
+            {"id": "nvidia/llama-3.1-nemotron-ultra-253b-v1", "label": "Nemotron Ultra 253B · Flagship"},
+            {"id": "meta/llama-3.3-70b-instruct",             "label": "Llama 3.3 70B"},
+            {"id": "mistralai/mistral-large-2-instruct",      "label": "Mistral Large 2"},
+        ],
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com/v1",
+        "models": [
+            {"id": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
+            {"id": "deepseek-v4-pro",   "label": "DeepSeek V4 Pro"},
+        ],
+    },
     "minimax": {
         "name": "MiniMax",
         "base_url": "https://api.minimax.chat/v1",
@@ -56,7 +74,7 @@ CLOUD_PROVIDERS = {
         ],
     },
     "glm": {
-        "name": "智谱 GLM",
+        "name": "GLM",
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
         "models": [
             {"id": "glm-4-plus",   "label": "GLM-4-Plus"},
@@ -84,11 +102,11 @@ def save_config(config: dict):
 
 
 OLLAMA_OPTIONS_DEFAULTS = {
-    "num_ctx":        4096,   # 上下文窗口（token 数）
-    "temperature":    0.8,    # 随机性（越高越有创意）
+    "num_ctx":        8192,   # context window (token count)
+    "temperature":    0.8,    # randomness (higher = more creative)
     "top_p":          0.9,    # nucleus sampling
-    "repeat_penalty": 1.1,    # 重复惩罚
-    "num_predict":    -1,     # 最大输出 token（-1 = 不限）
+    "repeat_penalty": 1.1,    # repetition penalty
+    "num_predict":    -1,     # max output tokens (-1 = unlimited)
 }
 
 
@@ -99,7 +117,7 @@ def get_ollama_options() -> dict:
 
 def set_ollama_options(options: dict):
     config = load_config()
-    # 只保存有效键，值做基本类型校验
+    # Only save valid keys with basic type validation
     validated = {}
     for k, default in OLLAMA_OPTIONS_DEFAULTS.items():
         if k in options:
@@ -112,7 +130,7 @@ def set_ollama_options(options: dict):
 
 
 def get_cloud_keys() -> dict:
-    """返回 {provider: {api_key, enabled}} """
+    """Returns {provider: {api_key, enabled}}"""
     return load_config().get("cloud_keys", {})
 
 
@@ -122,8 +140,37 @@ def set_cloud_keys(keys: dict):
     save_config(config)
 
 
+REMOTE_SERVER_DEFAULTS = {
+    "host":        "",
+    "user":        "",
+    "ssh_port":    22,
+    "auth_mode":   "key",          # "key" | "password"
+    "key_path":    "~/.ssh/id_rsa",
+    "remote_port": 11434,
+    "local_port":  11435,
+}
+
+
+def get_remote_config() -> dict:
+    return {**REMOTE_SERVER_DEFAULTS,
+            **load_config().get("remote_server", {})}
+
+
+def set_remote_config(cfg: dict):
+    config = load_config()
+    validated = {}
+    for k, default in REMOTE_SERVER_DEFAULTS.items():
+        if k in cfg:
+            try:
+                validated[k] = type(default)(cfg[k])
+            except (ValueError, TypeError):
+                validated[k] = default
+    config["remote_server"] = validated
+    save_config(config)
+
+
 def get_enabled_cloud_models() -> list[dict]:
-    """返回已配置 API Key 的云端模型列表，格式同 Ollama models"""
+    """Returns list of cloud models with configured API keys, same format as Ollama models"""
     keys = get_cloud_keys()
     models = []
     for provider, meta in CLOUD_PROVIDERS.items():

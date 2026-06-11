@@ -3,7 +3,7 @@
 set -e
 
 APP="Rivus.app.nosync"
-VERSION="1.0.0"
+VERSION="1.0.1"
 OUT="dist.nosync/Rivus-${VERSION}.dmg"
 TMP="dist.nosync/Rivus-tmp.dmg"
 
@@ -17,7 +17,7 @@ echo "=== 1. 复制源码到 .app/Resources ==="
 DEST="${APP}/Contents/Resources/app"
 rm -rf "$DEST"
 mkdir -p "$DEST"
-cp app.py server.py db.py ingest.py query.py config.py requirements.txt "$DEST/"
+cp app.py server.py db.py ingest.py query.py config.py remote.py requirements.txt "$DEST/"
 cp -r ui "$DEST/"
 
 echo "=== 1.5. 写入 Info.plist 和 AppIcon.icns ==="
