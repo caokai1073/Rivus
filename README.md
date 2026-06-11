@@ -175,7 +175,7 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 │   /api/query   /api/ingest/*   /api/ollama-*  ...   │
 └──────┬──────────────────┬───────────────────────────┘
        │                  │
-┌──────▼──────┐    ┌──────▼──────────────────────────┐
+┌──────▼──────┐    ┌──────▼───────────────────────────┐
 │  query.py   │    │           ingest.py              │
 │             │    │                                  │
 │  1. Expand  │    │  URL → readability               │
@@ -188,7 +188,7 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 │  7. Stream  │    ┌──────────────────────────────────┐
 └──────┬──────┘    │           db.py                  │
        │           │                                  │
-       │           │  SQLite + sqlite-vec              │
+       │           │  SQLite + sqlite-vec             │
        │           │  • documents table               │
        │           │  • chunks table (full text)      │
        │           │  • chunk_embeddings (vec index)  │
