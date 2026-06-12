@@ -68,33 +68,6 @@ The LLM autonomously decides what to search and how many times, using three tool
 
 **Both modes:** document-pinning lets you reference a specific document directly (skips the agent, reads the full doc)
 
-### 🤖 Local AI (Zero Cloud Required)
-- One-click Ollama integration — download and run models without touching the terminal
-- Supported models: **Qwen3**, **Llama 3**, **Gemma 3**, **Phi-4**, and any model on [ollama.com/library](https://ollama.com/library)
-- Configurable inference parameters: context window, temperature, top-p, repeat penalty, max tokens
-- Automatic `<think>` block filtering for reasoning models (Qwen3, DeepSeek-R1)
-
-### 🌐 SSH Remote Server Mode
-
-If your GPU is on a remote Linux machine (lab server, cloud VM, home server), Rivus can tunnel to it over SSH — no VPN, no port forwarding, no firewall changes needed.
-
-1. Go to **Settings → Remote Server**
-2. Enter your server's hostname, SSH username, and key path (or password)
-3. Click **Connect** — Rivus creates an SSH tunnel and routes all Ollama requests through it
-
-Your documents stay on your local machine. Only the LLM inference runs on the remote GPU. Both password and SSH key authentication are supported.
-
-### ☁️ Cloud AI (Optional)
-| Provider | Models |
-|---|---|
-| OpenAI | GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-4.1, o3 |
-| Anthropic | Claude Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5 |
-| DeepSeek | V4 Flash, V4 Pro |
-| Qwen / 通义千问 | Qwen3 235B, Qwen3 72B, Qwen Max, Plus, Turbo |
-| NVIDIA NIM | Nemotron Ultra 253B, Llama 3.3 70B, Mistral Large 2 |
-| MiniMax | M1, Text-01 |
-| 智谱 GLM | GLM-4-Plus, GLM-4-Flash (Free), GLM-Z1-Plus (Reasoning) |
-
 ### 📂 Document Management
 - **Right-click context menu** on any document: Open File, Download, Rename, Quote, Select, Delete
 - **Open File** — opens PDF/Word/Excel/Markdown with your system's default app; User text entries are served as `.txt`
@@ -116,6 +89,41 @@ Full English and Chinese interface — switches instantly without restart.
 - macOS: close button hides to Dock; click the Dock icon to restore
 - Windows: close button hides to system tray; right-click tray icon to show or quit; single-instance (clicking the exe again restores the window)
 - Import/export your entire knowledge base as a `.zip` backup
+
+---
+
+## AI Models
+
+### 🤖 Local (Zero Cloud Required)
+
+- One-click Ollama integration — download and run models without touching the terminal
+- Supported models: **Qwen3**, **Llama 3**, **Gemma 3**, **Phi-4**, and any model on [ollama.com/library](https://ollama.com/library)
+- Configurable inference parameters: context window, temperature, top-p, repeat penalty, max tokens
+- Automatic `<think>` block filtering for reasoning models (Qwen3, DeepSeek-R1)
+
+> **Recommended specs:** Apple Silicon Mac with 16 GB unified memory or above; Windows PC with an NVIDIA GPU with 8 GB VRAM or above. Cloud models work on any hardware.
+
+### 🌐 SSH Remote Server
+
+If your GPU is on a remote Linux machine (lab server, cloud VM, home server), Rivus can tunnel to it over SSH — no VPN, no port forwarding, no firewall changes needed.
+
+1. Go to **Settings → Remote Server**
+2. Enter your server's hostname, SSH username, and key path (or password)
+3. Click **Connect** — Rivus creates an SSH tunnel and routes all Ollama requests through it
+
+Your documents stay on your local machine. Only the LLM inference runs on the remote GPU. Both password and SSH key authentication are supported.
+
+### ☁️ Cloud
+
+| Provider | Models |
+|---|---|
+| OpenAI | GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-4.1, o3 |
+| Anthropic | Claude Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5 |
+| DeepSeek | V4 Flash, V4 Pro |
+| Qwen / 通义千问 | Qwen3 235B, Qwen3 72B, Qwen Max, Plus, Turbo |
+| NVIDIA NIM | Nemotron Ultra 253B, Llama 3.3 70B, Mistral Large 2 |
+| MiniMax | M1, Text-01 |
+| 智谱 GLM | GLM-4-Plus, GLM-4-Flash (Free), GLM-Z1-Plus (Reasoning) |
 
 ---
 
