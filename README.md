@@ -74,14 +74,26 @@ The LLM autonomously decides what to search and how many times, using three tool
 - Configurable inference parameters: context window, temperature, top-p, repeat penalty, max tokens
 - Automatic `<think>` block filtering for reasoning models (Qwen3, DeepSeek-R1)
 
+### 🌐 SSH Remote Server Mode
+
+If your GPU is on a remote Linux machine (lab server, cloud VM, home server), Rivus can tunnel to it over SSH — no VPN, no port forwarding, no firewall changes needed.
+
+1. Go to **Settings → Remote Server**
+2. Enter your server's hostname, SSH username, and key path (or password)
+3. Click **Connect** — Rivus creates an SSH tunnel and routes all Ollama requests through it
+
+Your documents stay on your local machine. Only the LLM inference runs on the remote GPU. Both password and SSH key authentication are supported.
+
 ### ☁️ Cloud AI (Optional)
 | Provider | Models |
 |---|---|
+| OpenAI | GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-4.1, o3 |
+| Anthropic | Claude Fable 5, Opus 4.8, Sonnet 4.6, Haiku 4.5 |
 | DeepSeek | V4 Flash, V4 Pro |
-| OpenAI | GPT-5.5, GPT-4.1, o3 |
-| Anthropic | Claude Opus 4, Sonnet 4, Haiku 4 |
+| Qwen / 通义千问 | Qwen3 235B, Qwen3 72B, Qwen Max, Plus, Turbo |
+| NVIDIA NIM | Nemotron Ultra 253B, Llama 3.3 70B, Mistral Large 2 |
 | MiniMax | M1, Text-01 |
-| 智谱 GLM | GLM-4-Plus, GLM-Z1-Plus (Reasoning) |
+| 智谱 GLM | GLM-4-Plus, GLM-4-Flash (Free), GLM-Z1-Plus (Reasoning) |
 
 ### 📂 Document Management
 - **Right-click context menu** on any document: Open File, Download, Rename, Quote, Select, Delete
@@ -187,35 +199,34 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 ┌────────────────────▼────────────────────────────────┐
 │              FastAPI (local HTTP server)            │
 │   /api/query   /api/ingest/*   /api/ollama-*  ...   │
-└──────┬──────────────────┬───────────────────────────┘
-       │                  │
-┌──────▼──────┐    ┌──────▼───────────────────────────┐
-│  query.py   │    │           ingest.py              │
-│             │    │                                  │
-│  Local:     │    │  URL → readability               │
-│  Decompose  │    │  PDF → PyMuPDF                   │
-│  → Embed    │    │  DOCX → python-docx              │
-│  → Vec+FTS  │    │  XLSX → openpyxl                 │
-│  → RRF      │    │  Markdown → plain text           │
-│  → Stream   │    │  Text → chunker                  │
-│             │    │  Chunks → BAAI/bge-m3 → vectors  │
-│  Cloud:     │    └──────────────────────────────────┘
-│  Agent loop │
-│  (tools)    │    ┌──────────────────────────────────┐
-│  → Stream   │    │           db.py                  │
-       │           │                                  │
+└──────┬──────────────────┬──────────────┬────────────┘
+       │                  │              │
+┌──────▼──────┐    ┌──────▼──────┐  ┌───▼────────────┐
+│  query.py   │    │  ingest.py  │  │   remote.py    │
+│             │    │             │  │                │
+│  Local:     │    │  URL        │  │  SSH tunnel    │
+│  Decompose  │    │  PDF        │  │  to remote     │
+│  → Embed    │    │  DOCX       │  │  Ollama server │
+│  → Vec+FTS  │    │  XLSX       │  └────────────────┘
+│  → RRF      │    │  Markdown   │
+│  → Stream   │    │  Text       │
+│             │    │  → bge-m3   │
+│  Cloud:     │    │  → vectors  │
+│  Agent loop │    └──────┬──────┘
+│  (tools)    │           │
+│  → Stream   │    ┌──────▼──────────────────────────┐
+       │           │           db.py                 │
        │           │  SQLite + sqlite-vec             │
-       │           │  • documents table               │
-       │           │  • chunks table (full text)      │
-       │           │  • chunk_embeddings (vec index)  │
-       └───────────│  • folders table                 │
-                   └──────────────────────────────────┘
-                   
+       │           │  • documents  • chunks           │
+       └───────────│  • embeddings • folders          │
+                   └─────────────────────────────────┘
+
        ┌──────────────────────────────────────────────┐
        │         LLM layer (config.py + query.py)     │
        │                                              │
        │  Local:  Ollama  →  localhost:11434          │
-       │  Cloud:  DeepSeek / OpenAI / Anthropic / ... │
+       │  Remote: Ollama  →  SSH tunnel (remote.py)   │
+       │  Cloud:  OpenAI / Anthropic / DeepSeek / ... │
        └──────────────────────────────────────────────┘
 ```
 
@@ -295,14 +306,16 @@ The frontend is plain HTML/JS in `ui/index.html` — no build step, just edit an
 
 ```
 Rivus/
-├── app.py          # pywebview window setup, macOS Dock integration
-├── server.py       # FastAPI routes (~50 endpoints)
-├── query.py        # Agent system: decompose → embed → search → fuse → stream (local)
-│                   #              tool-use agent loop (cloud)
+├── app.py          # pywebview window, macOS Dock + Windows tray integration
+├── server.py       # FastAPI routes, SSE streaming for ingest progress
+├── query.py        # RAG pipeline: decompose → embed → search → fuse → stream (local)
+│                   # tool-use agent loop (cloud)
 ├── ingest.py       # Document parsing and chunking (PDF, DOCX, XLSX, Markdown, URL, text)
-├── db.py           # SQLite schema, vector search, FTS
+├── db.py           # SQLite schema, vector search (sqlite-vec), FTS
 ├── config.py       # Settings persistence, cloud provider definitions
-├── launcher.py     # Windows launcher (hides console, handles PATH)
+├── remote.py       # SSH tunnel manager for remote Ollama server
+├── launcher.py     # Windows launcher: first-run pip install, version-aware updates,
+│                   # single-instance check, system tray, hide-on-close
 ├── ui/
 │   └── index.html  # Entire frontend (~4,000 lines, self-contained)
 ├── build_app.sh    # macOS DMG build script
@@ -367,9 +380,10 @@ If Rivus is useful to you, a ⭐ on GitHub goes a long way.
 - **完全本地**：文档、向量、对话历史全部存在本机 SQLite 数据库，无需任何云服务
 - **混合 RAG**：向量检索 + 全文检索 + RRF 融合 + Query 扩写，检索质量远超单纯关键词搜索
 - **支持本地模型**：通过 Ollama 一键下载运行 Qwen3、Llama 3、Gemma 3 等模型
-- **支持云端模型**：DeepSeek、OpenAI、Claude、智谱 GLM、MiniMax
+- **支持云端模型**：DeepSeek、OpenAI、Claude、通义千问、NVIDIA NIM、智谱 GLM、MiniMax
 - **多格式导入**：PDF、Word、Excel、Markdown、网页 URL、纯文本
 - **文档管理**：右键菜单支持打开文件、下载、批量删除、引用、改名
+- **SSH 远程模式**：GPU 在服务器上？在设置里填入 SSH 信息一键建立隧道，本地文档、远端推理，无需 VPN 或开放端口
 - **跨平台**：macOS + Windows 原生应用，关闭窗口隐藏到系统托盘（Windows）/ Dock（macOS），不占用任务栏
 - **中英双语**：界面支持中英文随时切换
 
