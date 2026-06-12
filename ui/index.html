@@ -3258,7 +3258,12 @@ async function submitAdd() {
       const customTitle = document.getElementById('url-title').value.trim();
       if (customTitle) fd.append('custom_title', customTitle);
       if (folderId) fd.append('folder_id', folderId);
-      res = await fetch('/api/ingest/url', { method: 'POST', body: fd });
+      const data = await _fetchWithProgress('/api/ingest/url', fd);
+      setModalStatus(`✅ ${data.title} — ${data.chunks} ${t('chunks')}`, 'success');
+      await loadDocs();
+      setTimeout(closeModal, 1200);
+      btn.disabled = false;
+      return;
     } else if (currentTab === 'text') {
       const title = document.getElementById('text-title').value.trim() || t('unnamed');
       const text = document.getElementById('text-body').value.trim();
@@ -3357,7 +3362,7 @@ async function submitAdd() {
       return;
     }
 
-    // ── URL / Text tabs (non-SSE, plain JSON response) ──
+    // ── Text tab (non-SSE, plain JSON response) ──
     if (!res.ok) {
       const err = await res.json();
       const detail = err.detail || '';

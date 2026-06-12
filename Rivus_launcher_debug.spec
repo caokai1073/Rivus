@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Rivus_launcher.spec — 轻量启动器（不打包 ML 依赖，首次运行时自动安装）
+# Rivus_launcher_debug.spec — DEBUG BUILD: console=True, upx=False
+# Use this to diagnose startup issues. Build with:
+#   pyinstaller Rivus_launcher_debug.spec --clean --noconfirm
 
 block_cipher = None
 
@@ -8,7 +10,6 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        # 把全部源文件打进去，启动器会在首次运行时解压到 AppData
         ('app.py',           'app'),
         ('server.py',        'app'),
         ('db.py',            'app'),
@@ -22,12 +23,10 @@ a = Analysis(
     ],
     hiddenimports=[
         'tkinter', 'tkinter.ttk',
-        'pystray', 'PIL', 'PIL.Image',
     ],
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # 故意排除所有重型包，让 pip 在用户机器上安装
         'torch', 'transformers', 'sentence_transformers',
         'fastapi', 'uvicorn', 'starlette',
         'numpy', 'scipy', 'sklearn',
@@ -50,18 +49,17 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Rivus',
-    debug=False,
+    name='Rivus_debug',
+    debug=True,       # verbose PyInstaller bootloader output
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,        # disable UPX (common cause of silent crashes / AV false positives)
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,     # show a console window with all print/traceback output
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon='AppIcon.ico',
-    # onefile=True，单个 exe 文件，方便分发
 )

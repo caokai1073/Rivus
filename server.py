@@ -42,7 +42,7 @@ def _prewarm_embed():
         from ingest import get_embed_model
         get_embed_model()
         _embed_ready[0] = True
-        print("[embed] ✓ Warm-up complete")
+        print("[embed] OK Warm-up complete")
     except Exception as e:
         print(f"[embed] Warm-up failed: {e}")
 
@@ -182,15 +182,20 @@ def _stream_ingest(fn, fn_kwargs: dict, cleanup_path: str = None) -> Iterator[st
 
     threading.Thread(target=run, daemon=True).start()
 
-    while True:
+    deadline = 600  # total timeout: 10 minutes
+    elapsed = 0
+    while elapsed < deadline:
         try:
-            event = q.get(timeout=300)
+            event = q.get(timeout=5)  # check every 5 s
         except Empty:
-            yield f'data: {json.dumps({"type": "error", "message": "Timeout"})}\n\n'
-            return
+            elapsed += 5
+            # Send a keepalive comment to prevent WebView2/WKWebView from closing the connection
+            yield ": keepalive\n\n"
+            continue
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         if event["type"] in ("done", "error"):
             return
+    yield f'data: {json.dumps({"type": "error", "message": "Timeout after 10 minutes"})}\n\n'
 
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -202,10 +207,12 @@ def api_ingest_url(url: str = Form(...), custom_title: Optional[str] = Form(None
     existing = find_by_url(url.strip())
     if existing:
         raise HTTPException(status_code=409, detail=f"__duplicate__{existing['id']}__{existing['title']}")
-    try:
-        return ingest_url(url, custom_title=custom_title or None, folder_id=folder_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return StreamingResponse(
+        _stream_ingest(ingest_url, dict(
+            url=url, custom_title=custom_title or None, folder_id=folder_id,
+        )),
+        media_type="text/event-stream", headers=_SSE_HEADERS,
+    )
 
 
 @app.patch("/api/docs/{doc_id}/title")

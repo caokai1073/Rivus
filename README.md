@@ -101,8 +101,8 @@ Full English and Chinese interface — switches instantly without restart.
 
 ### 🖥️ Native Desktop Feel
 - macOS and Windows native app (pywebview)
-- macOS: hide to Dock, reopen with click — stays out of your way
-- Windows: single-instance enforcement, no stray console windows
+- macOS: close button hides to Dock; click the Dock icon to restore
+- Windows: close button hides to system tray; right-click tray icon to show or quit; single-instance (clicking the exe again restores the window)
 - Import/export your entire knowledge base as a `.zip` backup
 
 ---
@@ -242,6 +242,7 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 | Web parsing | [readability-lxml](https://github.com/buriy/python-readability) |
 | DOCX parsing | [python-docx](https://python-docx.readthedocs.io/) |
 | XLSX parsing | [openpyxl](https://openpyxl.readthedocs.io/) |
+| Windows tray | [pystray](https://github.com/moses-palmer/pystray) |
 | Frontend | Vanilla HTML/CSS/JS (no framework, no build step) |
 
 ---
@@ -369,7 +370,7 @@ If Rivus is useful to you, a ⭐ on GitHub goes a long way.
 - **支持云端模型**：DeepSeek、OpenAI、Claude、智谱 GLM、MiniMax
 - **多格式导入**：PDF、Word、Excel、Markdown、网页 URL、纯文本
 - **文档管理**：右键菜单支持打开文件、下载、批量删除、引用、改名
-- **跨平台**：macOS + Windows 原生应用
+- **跨平台**：macOS + Windows 原生应用，关闭窗口隐藏到系统托盘（Windows）/ Dock（macOS），不占用任务栏
 - **中英双语**：界面支持中英文随时切换
 
 ### 快速运行

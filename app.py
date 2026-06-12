@@ -8,6 +8,7 @@ import threading
 import socket
 import time
 import urllib.request
+from pathlib import Path
 
 # ── Windows packaged mode: redirect user data to %APPDATA%\Rivus ─────────────
 # Only applies when running as a PyInstaller bundle on Windows; no effect on macOS / dev mode
@@ -29,6 +30,8 @@ _port        = [None]   # set once server starts; used by download_doc
 _force_quit  = [False]  # set to True to allow the window to actually close
 _nswindow    = [None]   # NSWindow reference captured on close, used for reopen
 _app_delegate = [None]  # strong reference to delegate, prevents Python GC
+_hwnd        = [None]   # Win32 HWND captured after window is shown
+_tray        = [None]   # pystray Icon instance
 
 
 def find_free_port() -> int:
@@ -133,6 +136,11 @@ class Api:
 
     def quit_app(self):
         _force_quit[0] = True
+        if _tray[0]:
+            try:
+                _tray[0].stop()
+            except Exception:
+                pass
         _window.destroy()
 
 
@@ -199,16 +207,70 @@ def _setup_macos():
         import traceback; traceback.print_exc()
 
 
+def _setup_win_tray():
+    """Create a system tray icon on Windows (runs in a daemon thread)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import pystray
+        from PIL import Image
+
+        ico_path = Path(__file__).parent / "AppIcon.ico"
+        if ico_path.exists():
+            image = Image.open(str(ico_path))
+        else:
+            # Fallback: plain green square
+            image = Image.new("RGB", (64, 64), color=(39, 174, 96))
+
+        def _show(icon, item):
+            hw = _hwnd[0]
+            if hw:
+                import ctypes
+                ctypes.windll.user32.ShowWindow(hw, 9)   # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(hw)
+
+        def _quit(icon, item):
+            _force_quit[0] = True
+            icon.stop()
+            if _window:
+                try:
+                    _window.destroy()
+                except Exception:
+                    pass
+            os._exit(0)
+
+        menu = pystray.Menu(
+            pystray.MenuItem("显示 Rivus", _show, default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("退出", _quit),
+        )
+        icon = pystray.Icon("Rivus", image, "Rivus · 问渠", menu)
+        _tray[0] = icon
+        icon.run()          # blocks this thread; daemon=True so it exits with the process
+    except Exception as e:
+        print(f"[tray] {e}")
+
+
 if __name__ == "__main__":
     # ── Windows single-instance check ────────────────────────────────────────
     if sys.platform == "win32":
         import ctypes
         _mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Global\\RivusAppMutex")
         if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-            hwnd = ctypes.windll.user32.FindWindowW(None, "Rivus · 问渠")
-            if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 9)       # SW_RESTORE
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
+            # FindWindowW cannot find hidden windows; use EnumWindows instead
+            _found = [0]
+            _ENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_size_t, ctypes.c_size_t)
+            def _enum_cb(hwnd, _):
+                buf = ctypes.create_unicode_buffer(256)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buf, 256)
+                if "Rivus" in buf.value:
+                    _found[0] = hwnd
+                    return False  # stop enumeration
+                return True
+            ctypes.windll.user32.EnumWindows(_ENUMPROC(_enum_cb), 0)
+            if _found[0]:
+                ctypes.windll.user32.ShowWindow(_found[0], 9)    # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(_found[0])
             sys.exit(0)
 
     PORT = find_free_port()
@@ -234,30 +296,57 @@ if __name__ == "__main__":
         js_api=api,
     )
 
+    def on_shown():
+        """Capture Win32 HWND and set app icon once the window is visible."""
+        if sys.platform == "win32":
+            import ctypes
+            _hwnd[0] = ctypes.windll.user32.FindWindowW(None, "Rivus · 问渠")
+            if _hwnd[0]:
+                ico = str(Path(__file__).parent / "AppIcon.ico")
+                if os.path.exists(ico):
+                    LR_LOADFROMFILE = 0x0010
+                    LR_DEFAULTSIZE  = 0x0040
+                    IMAGE_ICON      = 1
+                    WM_SETICON      = 0x0080
+                    hicon = ctypes.windll.user32.LoadImageW(
+                        0, ico, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE
+                    )
+                    if hicon:
+                        ctypes.windll.user32.SendMessageW(_hwnd[0], WM_SETICON, 0, hicon)  # ICON_SMALL
+                        ctypes.windll.user32.SendMessageW(_hwnd[0], WM_SETICON, 1, hicon)  # ICON_BIG
+
     def on_closing():
         """
-        Red X button handler:
-        - Windows: exit the entire process (uvicorn daemon thread exits with it)
-        - macOS: hide the window (Dock icon click can restore it)
+        Red X button handler — hide the window instead of quitting on both platforms.
+        Actual quit goes through Api.quit_app() which sets _force_quit[0] = True first.
         """
-        if sys.platform == "win32":
-            os._exit(0)
-
         if _force_quit[0]:
-            return True
+            return True  # real quit
+
+        if sys.platform == "win32":
+            import ctypes
+            hw = _hwnd[0]
+            if hw:
+                ctypes.windll.user32.ShowWindow(hw, 0)  # SW_HIDE → remove from taskbar, tray stays
+            return False  # prevent close
+
+        # macOS: hide via NSWindow
         try:
             from AppKit import NSApp
             wins = NSApp.windows()
-            print(f"[closing] NSApp.windows() count: {len(wins)}")
             if wins:
                 _nswindow[0] = wins[0]
                 _nswindow[0].orderOut_(None)
-                print("[closing] Window hidden, reference saved")
                 return False
         except Exception as e:
             print(f"[closing] orderOut_ failed: {e}")
         _window.hide()
         return False
 
+    _window.events.shown += on_shown
     _window.events.closing += on_closing
+
+    if sys.platform == "win32":
+        threading.Thread(target=_setup_win_tray, daemon=True).start()
+
     webview.start(func=_setup_macos)

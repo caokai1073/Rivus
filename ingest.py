@@ -366,7 +366,7 @@ def _ingest_text(url: str, title: str, text: str, source: str,
     for i, (chunk, emb) in enumerate(zip(chunks, all_embeddings)):
         insert_chunk(doc_id=doc_id, chunk_index=i, text=chunk, embedding=emb)
 
-    print(f"[ingest] ✓ Saved, doc_id={doc_id}")
+    print(f"[ingest] OK Saved, doc_id={doc_id}")
 
     # Generate summary in background (semaphore ensures only one runs at a time)
     def _enrich_guarded(doc_id, title, text):
@@ -420,7 +420,7 @@ Output the following (reply in the same language as the document):
         if resp.ok:
             summary = resp.json()["message"]["content"].strip()
             update_summary(doc_id, summary)
-            print(f"[enrich] ✓ doc_id={doc_id} summary generated")
+            print(f"[enrich] OK doc_id={doc_id} summary generated")
         else:
             print(f"[enrich] Ollama returned error: {resp.status_code}")
     except Exception as e:
