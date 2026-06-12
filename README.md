@@ -224,9 +224,9 @@ The app window opens automatically. On first run, the embedding model (`BAAI/bge
 │  (tools)    │           │
 │  → Stream   │    ┌──────▼──────────────────────────┐
        │           │           db.py                 │
-       │           │  SQLite + sqlite-vec             │
-       │           │  • documents  • chunks           │
-       └───────────│  • embeddings • folders          │
+       │           │  SQLite + sqlite-vec            │
+       │           │  • documents  • chunks          │
+       └───────────│  • embeddings • folders         │
                    └─────────────────────────────────┘
 
        ┌──────────────────────────────────────────────┐
